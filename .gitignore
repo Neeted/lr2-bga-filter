@@ -1,0 +1,30 @@
+# Visual Studio
+.vs/
+bin/
+obj/
+*.suo
+*.user
+*.pdb
+*.ipch
+*.aps
+*.opendb
+*.db
+*.idb
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Output files that might be in root (just in case, though usually in bin)
+*.ax
+*.lib
+*.exp
+*.dll
+*.exe
+
+# Editors
+.vscode/
+
+# Temporary files
+.tmp/

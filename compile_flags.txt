@@ -1,0 +1,13 @@
+-xc++
+-std=c++14
+--target=i686-pc-windows-msvc
+-fms-extensions
+-fms-compatibility
+-DWIN32
+-DNDEBUG
+-D_WINDOWS
+-D_USRDLL
+-D_UNICODE
+-DUNICODE
+-Ibaseclasses
+-Isrc
