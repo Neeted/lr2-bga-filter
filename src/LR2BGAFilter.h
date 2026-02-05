@@ -68,9 +68,11 @@ DECLARE_INTERFACE_(ILR2BGAFilterSettings, IUnknown) {
   STDMETHOD(GetDebugMode)(THIS_ BOOL * pDebug) PURE;
   STDMETHOD(SetDebugMode)(THIS_ BOOL debug) PURE;
 
-  // 最大FPS制限 (0 = 無制限, 1-60 = 制限あり)
+  // 最大FPS制限 (有効/無効の切り替えとターゲットFPS設定)
   STDMETHOD(GetMaxFPS)(THIS_ int *pMaxFPS) PURE;
   STDMETHOD(SetMaxFPS)(THIS_ int maxFPS) PURE;
+  STDMETHOD(GetLimitFPS)(THIS_ BOOL *pEnabled) PURE;
+  STDMETHOD(SetLimitFPS)(THIS_ BOOL enabled) PURE;
 
   // LR2ダミーモード (1x1の黒画像を一度だけ送信し、以降の処理をスキップ)
   STDMETHOD(GetDummyMode)(THIS_ BOOL * pDummy) PURE;
@@ -205,6 +207,8 @@ public:
   STDMETHOD(SetDebugMode)(BOOL debug) override;
   STDMETHOD(GetMaxFPS)(int *pMaxFPS) override;
   STDMETHOD(SetMaxFPS)(int maxFPS) override;
+  STDMETHOD(GetLimitFPS)(BOOL *pEnabled) override;
+  STDMETHOD(SetLimitFPS)(BOOL enabled) override;
   STDMETHOD(GetDummyMode)(BOOL *pDummy) override;
   STDMETHOD(SetDummyMode)(BOOL dummy) override;
   STDMETHOD(GetPassthroughMode)(BOOL *pPassthrough) override;

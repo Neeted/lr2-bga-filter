@@ -10,6 +10,8 @@
 #include "LR2BGATypes.h"
 #include "resource.h"
 #include <streams.h>
+#include <vector>
+#include <functional>
 
 
 //------------------------------------------------------------------------------
@@ -44,17 +46,49 @@ private:
   // フィルタ設定インターフェースへのポインタ
   ILR2BGAFilterSettings *m_pSettings;
 
-  // 設定値のローカルコピー (ダイアログ表示用)
+  //--------------------------------------------------------------------------
+  // Property Binder Architecture
+  //--------------------------------------------------------------------------
+  enum class BindType { Bool, Int, Combo, Slider };
+
+  struct Binding {
+      UINT id;            // Control ID
+      BindType type;      // Data type
+      void* pTarget;      // Pointer to member variable
+      int minVal = 0;
+      int maxVal = 0;
+      bool immediateApply = false; // Apply to m_pSettings immediately on change
+      
+      // Callback for immediate application
+      std::function<void(ILR2BGAFilterSettings*, const Binding&)> applyCallback;
+      
+      // Callback for UI dependencies (enable/disable other controls)
+      std::function<void()> onUpdateUI;
+  };
+
+  std::vector<Binding> m_bindings;
+
+  void InitBindings();
+  void ApplyToUI();   // m_bindings -> UI
+  void LoadFromUI();  // UI -> m_bindings
+  bool HandleAutoBinding(UINT uMsg, WPARAM wParam, LPARAM lParam);
+
+  //--------------------------------------------------------------------------
+  // Member Variables (Local Cache)
+  //--------------------------------------------------------------------------
   int m_width;
   int m_height;
   ResizeAlgorithm m_algo;
   BOOL m_keepAspect;
   BOOL m_debugMode;
+  
+  BOOL m_limitFPS; // Added for UI state
   int m_maxFPS;
+  
   BOOL m_dummyMode;
   BOOL m_passthroughMode;
 
-  // 外部ウィンドウ設定 (External window settings)
+  // External window settings
   BOOL m_extEnabled;
   int m_extX;
   int m_extY;
@@ -64,17 +98,25 @@ private:
   BOOL m_extKeepAspect;
   BOOL m_extPassthrough;
   BOOL m_extTopmost;
-  BOOL m_autoRemoveLB;
+  
+  // Brightness (Added)
+  int m_brightnessLR2;
+  int m_brightnessExt;
 
-  // 手動クローズ設定 (Manual Close Settings)
+  // Auto Open (Added)
+  BOOL m_autoOpen;
+
+  // Letterbox
+  BOOL m_autoRemoveLB;
+  int m_lbThreshold;
+  int m_lbStability;
+
+  // Manual Close
   BOOL m_closeOnRightClick;
   BOOL m_gamepadCloseEnabled;
   int m_gamepadID;
   int m_gamepadButtonID;
   BOOL m_keyboardCloseEnabled;
   int m_keyboardKeyCode;
-
-  int m_lbThreshold;
-  int m_lbStability;
 };
 

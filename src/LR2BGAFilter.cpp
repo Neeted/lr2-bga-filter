@@ -282,10 +282,22 @@ STDMETHODIMP CLR2BGAFilter::GetMaxFPS(int *pMaxFPS) {
 }
 
 STDMETHODIMP CLR2BGAFilter::SetMaxFPS(int maxFPS) {
-  if (maxFPS < 0 || maxFPS > 60) {
+  if (maxFPS < 1 || maxFPS > 60) {
     return E_INVALIDARG;
   }
   m_pSettings->m_maxFPS = maxFPS;
+  m_pSettings->Save();
+  return S_OK;
+}
+
+STDMETHODIMP CLR2BGAFilter::GetLimitFPS(BOOL *pEnabled) {
+  CheckPointer(pEnabled, E_POINTER);
+  *pEnabled = m_pSettings->m_limitFPSEnabled ? TRUE : FALSE;
+  return S_OK;
+}
+
+STDMETHODIMP CLR2BGAFilter::SetLimitFPS(BOOL enabled) {
+  m_pSettings->m_limitFPSEnabled = (enabled != FALSE);
   m_pSettings->Save();
   return S_OK;
 }
@@ -1473,7 +1485,10 @@ void CLR2BGAFilter::ProcessLetterboxDetection(const BYTE* pSrcData, long actualD
 //   S_FALSE : フレームスキップ (FPS制限によりドロップすべき)
 // ------------------------------------------------------------------------------
 HRESULT CLR2BGAFilter::WaitFPSLimit(REFERENCE_TIME rtStart, REFERENCE_TIME rtEnd) {
-    if (m_pSettings->m_maxFPS <= 0) return S_OK;
+    // FPS制限が無効、または設定値が不正(0以下)の場合は処理をスキップ
+    if (!m_pSettings->m_limitFPSEnabled || m_pSettings->m_maxFPS <= 0) {
+        return S_OK; // 制限なし
+    }
 
     REFERENCE_TIME minInterval = 10000000LL / m_pSettings->m_maxFPS;
     if (m_lastOutputTime > 0 && (rtStart - m_lastOutputTime) < minInterval) {

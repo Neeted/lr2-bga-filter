@@ -25,7 +25,8 @@ public:
     bool m_keepAspectRatio;         // アスペクト比を維持するか (黒帯が入る可能性あり)
     bool m_passthroughMode;         // パススルーモード有効化 (処理スキップ)
     bool m_dummyMode;               // ダミー出力モード (1x1ピクセル等の軽量出力をLR2へ渡す)
-    int m_maxFPS;                   // FPS制限 (0で無制限)
+    int m_maxFPS;                   // FPS制限値 (ターゲットFPS)
+    bool m_limitFPSEnabled;         // FPS制限を有効にするかどうか (チェックボックスの状態)
 
     // デバッグ設定 (Debug Settings)
     bool m_debugMode;               // デバッグモード有効化 (ログ出力など)
