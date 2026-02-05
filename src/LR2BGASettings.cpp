@@ -12,7 +12,8 @@ LR2BGASettings::LR2BGASettings()
     , m_keepAspectRatio(true)
     , m_passthroughMode(false)
     , m_dummyMode(false)
-    , m_maxFPS(0)
+    , m_maxFPS(60)
+    , m_limitFPSEnabled(false)
     , m_debugMode(false)
     , m_extWindowEnabled(false)
     , m_extWindowX(0)
@@ -61,7 +62,27 @@ void LR2BGASettings::Load()
         if (RegQueryValueExW(hKey, L"ResizeAlgo", NULL, NULL, (LPBYTE)&data, &size) == ERROR_SUCCESS) m_resizeAlgo = (ResizeAlgorithm)data;
         if (RegQueryValueExW(hKey, L"KeepAspectRatio", NULL, NULL, (LPBYTE)&data, &size) == ERROR_SUCCESS) m_keepAspectRatio = (data != 0);
         if (RegQueryValueExW(hKey, L"DebugMode", NULL, NULL, (LPBYTE)&data, &size) == ERROR_SUCCESS) m_debugMode = (data != 0);
-        if (RegQueryValueExW(hKey, L"MaxFPS", NULL, NULL, (LPBYTE)&data, &size) == ERROR_SUCCESS) m_maxFPS = data;
+        // MaxFPS と制限有効フラグの移行ロジック (後方互換性維持のため)
+        DWORD maxFPS = 0;
+        bool hasMaxFPS = (RegQueryValueExW(hKey, L"MaxFPS", NULL, NULL, (LPBYTE)&maxFPS, &size) == ERROR_SUCCESS);
+        
+        DWORD limitEnabled = 0;
+        bool hasLimit = (RegQueryValueExW(hKey, L"LimitFPSEnabled", NULL, NULL, (LPBYTE)&limitEnabled, &size) == ERROR_SUCCESS);
+
+        if (hasLimit) {
+            // 新形式: LimitFPSEnabled が存在する場合 (v2.0以降)
+            if (hasMaxFPS) m_maxFPS = maxFPS;
+            m_limitFPSEnabled = (limitEnabled != 0);
+        } else {
+            // 旧形式からの移行: MaxFPS=0 を「無効」として扱っていたバージョンのデータへの対応
+            if (hasMaxFPS && maxFPS > 0) {
+                m_maxFPS = maxFPS;
+                m_limitFPSEnabled = true; // 値があれば有効とみなす
+            } else {
+                m_maxFPS = 60; // 0 (無効) が保存されていた場合は、デフォルト値60fpsで無効状態とする
+                m_limitFPSEnabled = false;
+            }
+        }
         if (RegQueryValueExW(hKey, L"DummyMode", NULL, NULL, (LPBYTE)&data, &size) == ERROR_SUCCESS) m_dummyMode = (data != 0);
         if (RegQueryValueExW(hKey, L"PassthroughMode", NULL, NULL, (LPBYTE)&data, &size) == ERROR_SUCCESS) m_passthroughMode = (data != 0);
         
@@ -115,6 +136,7 @@ void LR2BGASettings::Save()
         data = m_keepAspectRatio ? 1 : 0; RegSetValueExW(hKey, L"KeepAspectRatio", 0, REG_DWORD, (LPBYTE)&data, sizeof(DWORD));
         data = m_debugMode ? 1 : 0; RegSetValueExW(hKey, L"DebugMode", 0, REG_DWORD, (LPBYTE)&data, sizeof(DWORD));
         data = m_maxFPS; RegSetValueExW(hKey, L"MaxFPS", 0, REG_DWORD, (LPBYTE)&data, sizeof(DWORD));
+        data = m_limitFPSEnabled ? 1 : 0; RegSetValueExW(hKey, L"LimitFPSEnabled", 0, REG_DWORD, (LPBYTE)&data, sizeof(DWORD));
         data = m_dummyMode ? 1 : 0; RegSetValueExW(hKey, L"DummyMode", 0, REG_DWORD, (LPBYTE)&data, sizeof(DWORD));
         data = m_passthroughMode ? 1 : 0; RegSetValueExW(hKey, L"PassthroughMode", 0, REG_DWORD, (LPBYTE)&data, sizeof(DWORD));
 
