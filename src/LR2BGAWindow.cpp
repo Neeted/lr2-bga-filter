@@ -58,28 +58,119 @@ LR2BGAWindow::LR2BGAWindow(LR2BGASettings* pSettings)
     m_debugText[0] = L'\0';
     m_bInputStop = false;
     m_bPropPageActive = false;
+    m_hPropPageWnd = NULL;
+}
+
+// プロパティページウィンドウを探すための EnumWindows コールバック
+// タイトルに "LR2 BGA Filter" が含まれるウィンドウを探す（ロケールに依存しない）
+struct FindPropPageData {
+    HWND hFoundWnd;
+    DWORD targetPid;
+};
+
+static BOOL CALLBACK FindPropPageCallback(HWND hwnd, LPARAM lParam)
+{
+    FindPropPageData* pData = (FindPropPageData*)lParam;
+    
+    // 同じプロセスのウィンドウのみ対象
+    DWORD pid = 0;
+    GetWindowThreadProcessId(hwnd, &pid);
+    if (pid != pData->targetPid) return TRUE;
+    
+    // ウィンドウタイトルを取得
+    wchar_t title[256] = {0};
+    GetWindowTextW(hwnd, title, 256);
+    
+    // "LR2 BGA Filter" を含み、"Info" を含まない（デバッグウィンドウを除外）
+    if (wcsstr(title, L"LR2 BGA Filter") != NULL && wcsstr(title, L"Info") == NULL) {
+        pData->hFoundWnd = hwnd;
+        return FALSE; // 見つかったので列挙を停止
+    }
+    
+    return TRUE;
 }
 
 LR2BGAWindow::~LR2BGAWindow()
 {
+    // 現在のスレッドIDを取得（PropertyPageThread から呼ばれた場合のチェック用）
+    std::thread::id currentThreadId = std::this_thread::get_id();
+    
+    // 1. 外部ウィンドウのクローズ
     CloseExternalWindow();
     
-    if (m_hDebugWnd && IsWindow(m_hDebugWnd)) {
-        SendMessage(m_hDebugWnd, WM_CLOSE, 0, 0);
-        if (m_threadDebug.joinable()) m_threadDebug.join();
+    // 2. プロパティページの強制クローズ
+    //    ※PropertyPageThread から呼ばれた場合、ウィンドウは既に閉じられている
+    //    ※外部から呼ばれた場合のみウィンドウを探してクローズ
+    //    OLEプロパティフレームは WM_CLOSE では閉じない場合があるため、
+    //    WM_COMMAND + IDCANCEL (キャンセルボタンのシミュレート) を使用
+    bool calledFromPropThread = (m_threadProp.get_id() == currentThreadId);
+    
+    if (!calledFromPropThread) {
+        // m_hPropPageWnd が設定されていればそちらを優先
+        HWND hPropPage = m_hPropPageWnd;
+        
+        // m_hPropPageWnd が無効な場合、EnumWindows で探す
+        if (!hPropPage || !IsWindow(hPropPage)) {
+            FindPropPageData data = {0};
+            data.targetPid = GetCurrentProcessId();
+            EnumWindows(FindPropPageCallback, (LPARAM)&data);
+            hPropPage = data.hFoundWnd;
+        }
+        
+        if (hPropPage && IsWindow(hPropPage)) {
+            // キャンセルボタンを押すのをシミュレート（OLEプロパティフレームを閉じる）
+            PostMessage(hPropPage, WM_COMMAND, MAKEWPARAM(IDCANCEL, BN_CLICKED), 0);
+            // バックアップとして WM_CLOSE も送信
+            PostMessage(hPropPage, WM_CLOSE, 0, 0);
+        }
     }
-
-    // プロパティページスレッドのクリーンアップ
-    if (m_threadProp.joinable()) {
-        // プロパティページはOLEによって管理されるモーダルダイアログであり、
-        // OleCreatePropertyFrame はダイアログが閉じられるまでブロックします。
-        // デストラクタ内で join() を呼ぶと、ユーザーがダイアログを閉じるまで
-        // アプリケーション終了がブロックされてしまうため、detach() して
-        // スレッドを切り離します（OSプロセス終了時のクリーンアップに委ねる）。
+    
+    // 3. デバッグウィンドウの強制クローズ
+    bool calledFromDebugThread = (m_threadDebug.get_id() == currentThreadId);
+    
+    if (!calledFromDebugThread) {
+        HWND hDebug = FindWindowW(L"LR2BGAFilterDebugWnd", L"LR2 BGA Filter Info");
+        if (hDebug && IsWindow(hDebug)) {
+            PostMessage(hDebug, WM_CLOSE, 0, 0);
+        }
+        if (m_hDebugWnd && IsWindow(m_hDebugWnd) && m_hDebugWnd != hDebug) {
+            PostMessage(m_hDebugWnd, WM_CLOSE, 0, 0);
+        }
+    }
+    
+    // 4. ウィンドウがクローズ処理を完了するまで少し待機
+    if (!calledFromPropThread && !calledFromDebugThread) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(300));
+    }
+    
+    // 5. プロパティページスレッドの終了を待機
+    //    ※自分自身のスレッドに対して join/detach を呼ぶと terminate するのでスキップ
+    if (m_threadProp.joinable() && !calledFromPropThread) {
+        // 最大2秒間、100msごとにスレッド終了をチェック
+        for (int i = 0; i < 20 && m_bPropPageActive; ++i) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        }
+        if (m_threadProp.joinable()) {
+            m_threadProp.detach();
+        }
+    } else if (calledFromPropThread && m_threadProp.joinable()) {
+        // PropertyPageThread から呼ばれた場合は detach して切り離す
+        // （スレッド終了時に自動クリーンアップ）
         m_threadProp.detach();
     }
 
-    StopInputMonitor(); // Stop Monitor
+    // 6. デバッグウィンドウスレッドの終了を待機
+    if (m_threadDebug.joinable() && !calledFromDebugThread) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(200));
+        if (m_threadDebug.joinable()) {
+            m_threadDebug.detach();
+        }
+    } else if (calledFromDebugThread && m_threadDebug.joinable()) {
+        m_threadDebug.detach();
+    }
+
+    // 7. 入力監視の停止
+    StopInputMonitor();
     
     if (m_threadInput.joinable()) m_threadInput.join();
 
@@ -749,6 +840,17 @@ void LR2BGAWindow::ShowPropertyPage()
     }
 }
 
+// EnumThreadWindows コールバック (プロパティページHWND取得用)
+static BOOL CALLBACK EnumPropPageWindowsCallback(HWND hwnd, LPARAM lParam)
+{
+    LR2BGAWindow* pThis = (LR2BGAWindow*)lParam;
+    if (IsWindowVisible(hwnd)) {
+        pThis->m_hPropPageWnd = hwnd;
+        return FALSE; // 停止
+    }
+    return TRUE;
+}
+
 void LR2BGAWindow::PropertyPageThread()
 {
     if (!m_pFilterUnk) return;
@@ -759,9 +861,20 @@ void LR2BGAWindow::PropertyPageThread()
     IUnknown* pFilterUnk = m_pFilterUnk;
     GUID clsid = CLSID_LR2BGAFilterPropertyPage;
     
-    // プロパティフレームを表示
+    // プロパティフレームのHWNDを取得するため、スレッドIDを記録
+    DWORD threadId = GetCurrentThreadId();
+    
+    // 遅延してHWNDを取得するための別スレッド
+    // (OleCreatePropertyFrame はブロックするため、直後に EnumThreadWindows できない)
+    std::thread hwndCapture([this, threadId]() {
+        std::this_thread::sleep_for(std::chrono::milliseconds(200));
+        EnumThreadWindows(threadId, EnumPropPageWindowsCallback, (LPARAM)this);
+    });
+    hwndCapture.detach();
+    
+    // プロパティフレームを表示 (ブロッキング呼び出し)
     HRESULT hr = OleCreatePropertyFrame(
-        NULL,                   // 親ウィンドウ (NULL = デスクトップ, または DebugWnd を使用可能)
+        NULL,                   // 親ウィンドウ (NULL = デスクトップ)
         0, 0,                   // x, y
         L"LR2 BGA Filter",      // キャプション
         1,                      // オブジェクト数
@@ -771,6 +884,9 @@ void LR2BGAWindow::PropertyPageThread()
         0,                      // ロケール ID
         0, NULL                 // 予約済み
     );
+    
+    // プロパティページが閉じられたらHWNDをクリア
+    m_hPropPageWnd = NULL;
     
     CoUninitialize();
     m_bPropPageActive = false;
