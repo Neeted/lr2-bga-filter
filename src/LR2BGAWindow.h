@@ -27,8 +27,8 @@
 //      - ウィンドウの位置、サイズ、アスペクト比の維持。
 //      - キーボード/ゲームパッド入力によるウィンドウ閉鎖機能。
 //
-//   2. オーバーレイウィンドウ (Overlay Window) の管理 (現在非アクティブ)
-//      - LR2本体の上に情報を重ねて表示するための機能（将来拡張用）。
+//   2. オーバーレイウィンドウ (Overlay Window) の管理
+//      - 外部ビューアウィンドウの上に明るさ調整用のオーバーレイを表示する機能。
 //
 //   3. デバッグウィンドウ (Debug Window) の管理
 //      - フィルタの動作状況、FPS、ドロップフレーム数、黒帯判定の詳細などを表示。
@@ -141,6 +141,7 @@ public:
     std::atomic<bool> m_bPropPageActive; // プロパティページ表示中フラグ
     std::thread m_threadProp;       // プロパティページスレッド
     std::thread m_threadFocus;      // フォーカス復帰スレッド
+    HWND m_hPropPageWnd;            // プロパティページウィンドウハンドル (強制クローズ用)
 };
 
 // Auto-link winmm.lib for joystick

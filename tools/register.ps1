@@ -20,7 +20,13 @@ if (-not (Test-Path $FilterPath)) {
 
 if (-not (Test-Path $FilterPath)) {
     # 3. Dev Environment (Relative from tools)
-    $FilterPath = Join-Path $PSScriptRoot "..\bin\Win32\Release\LR2BGAFilter.ax"
+    $DebugPath = Join-Path $PSScriptRoot "..\bin\Win32\Debug\LR2BGAFilter.ax"
+    if (Test-Path $DebugPath) {
+        $FilterPath = $DebugPath
+    }
+    else {
+        $FilterPath = Join-Path $PSScriptRoot "..\bin\Win32\Release\LR2BGAFilter.ax"
+    }
 }
 $FilterGuid = "{7B8C9D0E-1F2A-4B3C-8D4E-5F6A7B8C9D0E}"
 

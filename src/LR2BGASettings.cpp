@@ -40,6 +40,12 @@ LR2BGASettings::LR2BGASettings()
     , m_gamepadButtonID(0)
     , m_keyboardCloseEnabled(false)
     , m_keyboardKeyCode(VK_ESCAPE)
+    
+    // デバッグウィンドウ初期値 (CW_USEDEFAULT)
+    , m_debugWindowX(CW_USEDEFAULT)
+    , m_debugWindowY(CW_USEDEFAULT)
+    , m_debugWindowWidth(450)
+    , m_debugWindowHeight(1000)
 {
     // InitializeCriticalSection(&m_cs); // No longer needed
 }
@@ -117,6 +123,21 @@ void LR2BGASettings::Load()
         if (RegQueryValueExW(hKey, L"KeyboardCloseEnabled", NULL, NULL, (LPBYTE)&data, &size) == ERROR_SUCCESS) m_keyboardCloseEnabled = (data != 0);
         if (RegQueryValueExW(hKey, L"KeyboardKeyCode", NULL, NULL, (LPBYTE)&data, &size) == ERROR_SUCCESS) m_keyboardKeyCode = (int)data;
 
+        // デバッグウィンドウ設定読み込み
+        bool hasDebugPos = false;
+        if (RegQueryValueExW(hKey, L"DebugWindowX", NULL, NULL, (LPBYTE)&data, &size) == ERROR_SUCCESS) { m_debugWindowX = (int)data; hasDebugPos = true; }
+        if (RegQueryValueExW(hKey, L"DebugWindowY", NULL, NULL, (LPBYTE)&data, &size) == ERROR_SUCCESS) { m_debugWindowY = (int)data; hasDebugPos = true; }
+        
+        // サイズは個別にあれば読み込む
+        if (RegQueryValueExW(hKey, L"DebugWindowWidth", NULL, NULL, (LPBYTE)&data, &size) == ERROR_SUCCESS) m_debugWindowWidth = (int)data;
+        if (RegQueryValueExW(hKey, L"DebugWindowHeight", NULL, NULL, (LPBYTE)&data, &size) == ERROR_SUCCESS) m_debugWindowHeight = (int)data;
+        
+        // X/Y が設定されていない場合は CW_USEDEFAULT にリセット（安全のため）
+        if (!hasDebugPos) {
+            m_debugWindowX = CW_USEDEFAULT;
+            m_debugWindowY = CW_USEDEFAULT;
+        }
+
         RegCloseKey(hKey);
     }
     Unlock();
@@ -170,6 +191,12 @@ void LR2BGASettings::Save()
         data = (DWORD)m_gamepadButtonID; RegSetValueExW(hKey, L"GamepadButtonID", 0, REG_DWORD, (LPBYTE)&data, sizeof(DWORD));
         data = m_keyboardCloseEnabled ? 1 : 0; RegSetValueExW(hKey, L"KeyboardCloseEnabled", 0, REG_DWORD, (LPBYTE)&data, sizeof(DWORD));
         data = (DWORD)m_keyboardKeyCode; RegSetValueExW(hKey, L"KeyboardKeyCode", 0, REG_DWORD, (LPBYTE)&data, sizeof(DWORD));
+
+        // デバッグウィンドウ設定保存
+        data = (DWORD)m_debugWindowX; RegSetValueExW(hKey, L"DebugWindowX", 0, REG_DWORD, (LPBYTE)&data, sizeof(DWORD));
+        data = (DWORD)m_debugWindowY; RegSetValueExW(hKey, L"DebugWindowY", 0, REG_DWORD, (LPBYTE)&data, sizeof(DWORD));
+        data = (DWORD)m_debugWindowWidth; RegSetValueExW(hKey, L"DebugWindowWidth", 0, REG_DWORD, (LPBYTE)&data, sizeof(DWORD));
+        data = (DWORD)m_debugWindowHeight; RegSetValueExW(hKey, L"DebugWindowHeight", 0, REG_DWORD, (LPBYTE)&data, sizeof(DWORD));
 
         RegCloseKey(hKey);
     }

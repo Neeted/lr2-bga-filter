@@ -1,6 +1,5 @@
 ﻿#pragma once
 #include <windows.h>
-#include <windows.h>
 #include <mutex>
 #include "LR2BGATypes.h"
 
@@ -41,6 +40,12 @@ public:
     bool m_extWindowKeepAspect;     // アスペクト比維持 (外部ウィンドウ)
     bool m_extWindowPassthrough;    // ソース同期モード (リサイズせず入力解像度で表示)
     bool m_extWindowTopmost;        // 最前面表示 (Topmost)
+    
+    // デバッグウィンドウ位置設定
+    int m_debugWindowX;
+    int m_debugWindowY;
+    int m_debugWindowWidth;
+    int m_debugWindowHeight;
 
 
     // スレッドセーフアクセス用設定構造体
@@ -113,7 +118,7 @@ public:
     void Unlock() { m_mtx.unlock(); }
 
 private:
-    std::mutex m_mtx;
+    std::recursive_mutex m_mtx;
     static const wchar_t* REGISTRY_KEY;
 };
 

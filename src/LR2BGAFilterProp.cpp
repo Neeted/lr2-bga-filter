@@ -135,13 +135,23 @@ HRESULT CLR2BGAFilterPropertyPage::OnConnect(IUnknown* pUnk)
 //------------------------------------------------------------------------------
 // OnDisconnect
 // フィルタとの接続が解除された際に呼び出される
+//
+// 重要: Release() を呼び出さない理由
+//   プロパティページが閉じられると、この関数が PropertyPageThread 内から呼ばれます。
+//   Release() を呼ぶと、これがフィルタへの最後の参照だった場合、フィルタのデストラクタが
+//   PropertyPageThread 内から実行されます。デストラクタは自身のスレッド (m_threadProp) を
+//   クリーンアップしようとしますが、実行中のスレッドに対して join/detach を呼ぶことは
+//   std::terminate を引き起こします。
+//
+//   この問題を回避するため、参照のリリースはスキップします。
+//   プロパティページが閉じられた後、ホストアプリケーションがフィルタグラフを破棄する際に
+//   フィルタは正しくクリーンアップされます。
 //------------------------------------------------------------------------------
 HRESULT CLR2BGAFilterPropertyPage::OnDisconnect()
 {
-    if (m_pSettings) {
-        m_pSettings->Release();
-        m_pSettings = NULL;
-    }
+    // 意図的に Release() を呼ばない
+    // フィルタへの参照はホストアプリケーションによってクリーンアップされる
+    m_pSettings = NULL;
     return S_OK;
 }
 
