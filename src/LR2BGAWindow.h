@@ -6,10 +6,12 @@
 #include <thread>
 #include <condition_variable>
 #include <atomic>
+#include <memory>
 #include <streams.h>
 #include <dvdmedia.h> // For VIDEOINFOHEADER
 #include "LR2BGASettings.h"
 #include "LR2BGALetterboxDetector.h" // For LetterboxDebugInfo
+#include "LR2BGAExternalRenderer.h"
 
 //------------------------------------------------------------------------------
 // クラス: LR2BGAWindow
@@ -102,33 +104,25 @@ public:
     // 外部ウィンドウ関連
     HWND m_hExtWnd;
     HWND m_hOverlayWnd;         // 明るさ調整用オーバーレイウィンドウ (黒色半透明)
-    
-    // リサイズ最適化用バッファ (LR2BGAWindow用)
-    // 外部ウィンドウ描画も高速化の恩恵を受けるため、ここでも永続化します。
-    std::vector<int> m_extLutXIndices;
-    std::vector<short> m_extLutXWeights;
+    std::unique_ptr<LR2BGAExternalRenderer> m_pRenderer;  // 描画エンジン
 
     std::thread m_threadExt;        // ウインドウスレッド
     std::thread m_threadInput;      // ゲームパッド/キーボード入力監視スレッド
     std::condition_variable m_cvInput; // 入力監視スレッド停止用CV
     std::mutex m_mtxInput;          // 入力監視CV用Mutex
     bool m_bInputStop;              // 入力監視停止フラグ
-    std::vector<BYTE> m_extWindowBuffer; // 描画用バックバッファ
-    int m_extWindowBufWidth;
-    int m_extWindowBufHeight;
     //--------------------------------------------------------------------------
     // ロック階層 (Lock Hierarchy) - デッドロック防止のためのルール
     //--------------------------------------------------------------------------
     // 複数のミューテックスを必要とする場合、必ず以下の順序で取得すること:
-    //   1. m_mtxInput     (最外側: 入力監視スレッド制御)
-    //   2. m_mtxExtWindow (外部ウィンドウ描画バッファ)
-    //   3. m_mtxDebug     (最内側: デバッグテキストバッファ)
+    //   1. m_mtxInput (入力監視スレッド制御)
+    //   2. m_mtxDebug (デバッグテキストバッファ)
+    //   3. Renderer内部のmutex (描画バッファ保護)
     //
     // 注意:
     //   - ロックを保持したまま GUI 操作 (SetWindowPos, SendMessage 等) を行わないこと。
     //   - ロックのスコープはできるだけ短くすること。
     //--------------------------------------------------------------------------
-    std::mutex m_mtxExtWindow; // 2. 描画バッファアクセス保護用
 
     // デバッグウィンドウ関連
     IUnknown* m_pFilterUnk;

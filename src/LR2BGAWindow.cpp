@@ -23,7 +23,6 @@
 //     `GWLP_USERDATA` を使用して `LR2BGAWindow` インスタンスへメッセージを転送します。
 //   - 描画処理は GDI (Graphics Device Interface) を使用して行われます。
 //------------------------------------------------------------------------------
-#include "LR2BGAImageProc.h"
 #include "resource.h"
 #include <tlhelp32.h>
 #include <tchar.h>
@@ -32,6 +31,8 @@
 static const wchar_t* EXT_WND_CLASS = L"LR2BGAFilterExtWnd";
 static const wchar_t* OVERLAY_WND_CLASS = L"LR2BGAFilterOverlayWnd";
 static const wchar_t* DEBUG_WND_CLASS = L"LR2BGAFilterDebugWnd";
+
+extern HINSTANCE g_hInst;  // LR2BGAFilter.cpp で定義
 
 //------------------------------------------------------------------------------
 // 定数定義 (Constants)
@@ -50,7 +51,7 @@ LR2BGAWindow::LR2BGAWindow(LR2BGASettings* pSettings)
     , m_hOverlayWnd(NULL)
     , m_hDebugWnd(NULL)
     , m_hBtnSettings(NULL)
-
+    , m_pRenderer(std::make_unique<LR2BGAExternalRenderer>(pSettings))
     , m_pFilterUnk(NULL)
 {
     // Mutexes don't need explicit initialization
@@ -142,137 +143,16 @@ void LR2BGAWindow::CloseExternalWindow()
 // オーバーレイウィンドウ（輝度調整用）の更新
 void LR2BGAWindow::UpdateOverlayWindow()
 {
-    if (!m_hOverlayWnd || !IsWindow(m_hOverlayWnd)) return;
-
-    // 不透明度計算: 0 (透明) ～ 255 (不透明)
-    // Brightness: 100 (最大輝度) -> Alpha 0 (透明)
-    // Brightness: 0 (真っ黒) -> Alpha 255 (完全黒オーバーレイ)
-    int alpha = 255 - (m_pSettings->m_brightnessExt * 255 / 100);
-    if (alpha < 0) alpha = 0;
-    if (alpha > 255) alpha = 255;
-
-    SetLayeredWindowAttributes(m_hOverlayWnd, 0, (BYTE)alpha, LWA_ALPHA);
-    
-    // 位置同期
-    if (m_hExtWnd && IsWindow(m_hExtWnd)) {
-        RECT rect;
-        GetWindowRect(m_hExtWnd, &rect);
-        
-        // オーバーレイのZオーダー制御
-        // ExtWindowがTopmostならOverlayもTopmost扱いにする必要があるが、
-        // OverlayはPopupウィンドウとしてExtWnd所有にしているため、
-        // 基本的に所有者のZオーダーに追従する。
-        // ここでは位置とサイズのみ同期し、NOACTIVATEとNOOWNERZORDERを指定する。
-        
-        HWND hWndInsertAfter = m_pSettings->m_extWindowTopmost ? HWND_TOPMOST : HWND_NOTOPMOST;
-        SetWindowPos(m_hOverlayWnd, hWndInsertAfter, 
-            rect.left, rect.top, rect.right - rect.left, rect.bottom - rect.top, 
-            SWP_NOACTIVATE | SWP_NOOWNERZORDER | SWP_SHOWWINDOW); 
+    if (m_pRenderer) {
+        m_pRenderer->UpdateOverlay(m_hOverlayWnd, m_hExtWnd);
     }
 }
 
 void LR2BGAWindow::UpdateExternalWindow(const BYTE* pSrcData, int srcWidth, int srcHeight, int srcStride, int srcBitCount, const RECT* pSrcRect)
 {
-    if (!m_hExtWnd || !IsWindow(m_hExtWnd)) return;
-
-    // Get thread-safe snapshot of settings
-    LR2BGASettings::ExtWindowConfig cfg;
-    m_pSettings->GetExtWindowConfig(cfg);
-    
-    int targetWidth = cfg.width;
-    int targetHeight = cfg.height;
-    
-    if (cfg.passthrough) {
-        // In passthrough, we use the cropped size if cropped
-        if (pSrcRect) {
-            targetWidth = pSrcRect->right - pSrcRect->left;
-            targetHeight = pSrcRect->bottom - pSrcRect->top;
-        } else {
-            targetWidth = srcWidth;
-            targetHeight = srcHeight;
-        }
+    if (m_pRenderer) {
+        m_pRenderer->UpdateFrame(pSrcData, srcWidth, srcHeight, srcStride, srcBitCount, pSrcRect, m_hExtWnd);
     }
-    
-    // Check buffer size
-    int dstStride = ((targetWidth * 3 + 3) & ~3);
-    int dstSize = dstStride * targetHeight;
-    
-    // バッファサイズ変更 (排他制御が必要)
-    {
-        std::lock_guard<std::mutex> lock(m_mtxExtWindow);
-        if (m_extWindowBuffer.size() != dstSize || 
-            m_extWindowBufWidth != targetWidth || 
-            m_extWindowBufHeight != targetHeight) {
-            m_extWindowBuffer.resize(dstSize);
-            m_extWindowBufWidth = targetWidth;
-            m_extWindowBufHeight = targetHeight;
-        }
-    }
-    
-    // パススルー時のウィンドウ強制サイズ更新
-    // デッドロック回避のため、ロックを外してから実行する
-    // (SetWindowPos -> WM_WINDOWPOSCHANGED -> WM_PAINT -> lock(m_mtxExtWindow) の順で呼ばれる可能性があるため)
-    if (cfg.passthrough && m_hExtWnd) {
-        RECT rc;
-        GetWindowRect(m_hExtWnd, &rc);
-        int currentW = rc.right - rc.left;
-        int currentH = rc.bottom - rc.top;
-        if (currentW != targetWidth || currentH != targetHeight) {
-             SetWindowPos(m_hExtWnd, NULL, 0, 0, targetWidth, targetHeight, 
-                 SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
-        }
-    }
-    
-    // リサイズ/コピー処理を行うため再度ロック
-    {
-        std::lock_guard<std::mutex> lock(m_mtxExtWindow);
-        
-        // クロップ範囲（Source Rect）の考慮
-        int effectiveSrcW = srcWidth;
-        int effectiveSrcH = srcHeight;
-        if (pSrcRect) {
-            effectiveSrcW = pSrcRect->right - pSrcRect->left;
-            effectiveSrcH = pSrcRect->bottom - pSrcRect->top;
-        }
-        
-        // 描画サイズとオフセット計算
-        int outWidth, outHeight, offsetX, offsetY;
-        
-        if (cfg.passthrough) {
-            // パススルーモード：ソースサイズをそのまま使用
-            outWidth = effectiveSrcW;
-            outHeight = effectiveSrcH;
-            offsetX = 0;
-            offsetY = 0;
-        } else {
-            // アスペクト比維持の計算
-            LR2BGAImageProc::CalculateResizeDimensions(
-                effectiveSrcW, effectiveSrcH, targetWidth, targetHeight,
-                cfg.keepAspect,
-                outWidth, outHeight, offsetX, offsetY);
-        }
-        
-        // 背景のクリア (レターボックス用)
-        // 描画領域がウィンドウ全体より小さい場合、余白を黒で塗りつぶす
-        if (outWidth < targetWidth || outHeight < targetHeight) {
-            memset(m_extWindowBuffer.data(), 0, m_extWindowBuffer.size());
-        }
-            
-        // リサイズ実行
-        if (cfg.algo == RESIZE_NEAREST) {
-            LR2BGAImageProc::ResizeNearestNeighbor(
-                pSrcData, srcWidth, srcHeight, srcStride, srcBitCount,
-                m_extWindowBuffer.data(), targetWidth, targetHeight, dstStride, 24,
-                outWidth, outHeight, offsetX, offsetY, pSrcRect, m_extLutXIndices);
-        } else {
-            LR2BGAImageProc::ResizeBilinear(
-                pSrcData, srcWidth, srcHeight, srcStride, srcBitCount,
-                m_extWindowBuffer.data(), targetWidth, targetHeight, dstStride, 24,
-                outWidth, outHeight, offsetX, offsetY, pSrcRect, m_extLutXIndices, m_extLutXWeights);
-        }
-    } // lock scope end  
-    // ウィンドウ再描画要求
-    InvalidateRect(m_hExtWnd, NULL, FALSE);
 }
 
 // 外部ウィンドウの位置・サイズ・最前面設定を更新
@@ -401,31 +281,16 @@ LRESULT CALLBACK LR2BGAWindow::ExtWndProc(HWND hwnd, UINT uMsg, WPARAM wParam, L
                 PAINTSTRUCT ps;
                 HDC hdc = BeginPaint(hwnd, &ps);
                 
-                // Mutexで画像バッファアクセスを保護
-                {
-                    std::lock_guard<std::mutex> lock(pWindow->m_mtxExtWindow);
-                    if (pWindow->m_extWindowBuffer.size() > 0) {
-                         BITMAPINFO bmi = {0};
-                         bmi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
-                         bmi.bmiHeader.biWidth = pWindow->m_extWindowBufWidth;
-                         bmi.bmiHeader.biHeight = pWindow->m_extWindowBufHeight;
-                         bmi.bmiHeader.biPlanes = 1;
-                         bmi.bmiHeader.biBitCount = 24;
-                         bmi.bmiHeader.biCompression = BI_RGB;
-                         
-                         RECT rect;
-                         GetClientRect(hwnd, &rect);
-                         SetStretchBltMode(hdc, COLORONCOLOR);
-                         StretchDIBits(hdc, 0, 0, rect.right, rect.bottom,
-                             0, 0, pWindow->m_extWindowBufWidth, pWindow->m_extWindowBufHeight,
-                             pWindow->m_extWindowBuffer.data(), &bmi, DIB_RGB_COLORS, SRCCOPY);
-                    } else {
-                        // Draw black background if no buffer yet
-                        RECT rect;
-                        GetClientRect(hwnd, &rect);
-                        FillRect(hdc, &rect, (HBRUSH)GetStockObject(BLACK_BRUSH));
-                    }
-                } // Unlock
+                // Renderer に描画を委譲
+                if (pWindow->m_pRenderer) {
+                    pWindow->m_pRenderer->Paint(hdc, hwnd);
+                } else {
+                    // フォールバック: 黒塗り
+                    RECT rect;
+                    GetClientRect(hwnd, &rect);
+                    FillRect(hdc, &rect, (HBRUSH)GetStockObject(BLACK_BRUSH));
+                }
+                
                 EndPaint(hwnd, &ps);
             }
             return 0;
@@ -1068,6 +933,3 @@ void LR2BGAWindow::OnManualClose()
         PostMessage(m_hExtWnd, WM_CLOSE, 0, 0);
     }
 }
-extern HINSTANCE g_hInst;
-
-

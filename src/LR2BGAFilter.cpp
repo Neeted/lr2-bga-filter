@@ -127,7 +127,13 @@ BOOL APIENTRY DllMain(HINSTANCE hModule, DWORD dwReason, LPVOID lpReserved) {
 CLR2BGAFilter::CLR2BGAFilter(LPUNKNOWN pUnk, HRESULT *phr)
     : CTransformFilter(NAME("LR2 BGA Filter"), pUnk, CLSID_LR2BGAFilter),
       m_pSettings(NULL), m_pWindow(NULL), m_bConfigMode(FALSE),
-      m_pTransformLogic(new LR2BGATransformLogic(NULL, NULL)) // Settings/Window are set later? No, usually in constructor.
+      m_pTransformLogic(new LR2BGATransformLogic(NULL, NULL)),
+      // 入力情報初期化
+      m_inputWidth(0), m_inputHeight(0), m_inputBitCount(0),
+      // 統計情報初期化
+      m_frameCount(0), m_processedFrameCount(0), m_inputFrameCount(0),
+      m_totalProcessTime(0), m_avgProcessTime(0.0),
+      m_frameRate(0.0), m_outputFrameRate(0.0)
 {
   // 設定マネージャ初期化
   m_pSettings = new LR2BGASettings();

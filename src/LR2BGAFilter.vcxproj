@@ -182,6 +182,7 @@
     <ClCompile Include="LR2BGALetterboxDetector.cpp" />
     <ClCompile Include="LR2BGASettings.cpp" />
     <ClCompile Include="LR2BGATransformLogic.cpp" />
+    <ClCompile Include="LR2BGAExternalRenderer.cpp" />
     <ClCompile Include="LR2BGAWindow.cpp" />
   </ItemGroup>
   <ItemGroup>
@@ -194,6 +195,7 @@
     <ClInclude Include="LR2BGATransformLogic.h" />
     <ClInclude Include="LR2BGATypes.h" />
     <ClInclude Include="LR2BGAWindow.h" />
+    <ClInclude Include="LR2BGAExternalRenderer.h" />
     <ClInclude Include="LR2BGAThreadPool.h" />
     <ClInclude Include="resource.h" />
   </ItemGroup>
