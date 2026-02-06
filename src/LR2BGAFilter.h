@@ -263,9 +263,6 @@ public:
   STDMETHOD(SetLetterboxStability)(int stability) override;
   STDMETHOD(ResetPerformanceStatistics)() override;
 
-  LetterboxMode SafeAnalyzeFrame(BYTE *pBuffer, long width, long height,
-                                 long stride, int bpp);
-
   //--------------------------------------------------------------------------
   // CTransformFilter Overrides
   //--------------------------------------------------------------------------
@@ -369,9 +366,6 @@ public:
   DWORD m_lastLBRequestTime;
 
   void LetterboxThread();
-  // SEH (構造化例外処理) 用ヘルパー
-  LetterboxMode SafeAnalyzeFrame(BYTE *pBuffer, size_t bufferSize, long width,
-                                 long height, long stride, int bpp);
 
   FilterMode m_mode; // 動作モード
 
@@ -382,7 +376,6 @@ public:
 
   REFERENCE_TIME m_lastOutputTime; // 最終出力フレーム時刻
   LONGLONG m_droppedFrames;        // FPS制限によりドロップされたフレーム数
-  long m_exceptionCount;           // 黒帯検出例外発生回数
 
   // ダミーモード状態
   bool m_dummySent;               // ダミーフレーム送信済みフラグ

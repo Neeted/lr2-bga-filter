@@ -526,7 +526,6 @@ void LR2BGAWindow::UpdateDebugInfo(
     double frameRate, double outputFrameRate,
     long long frameCount, long long droppedFrames,
     double avgTime,
-    long exceptionCount,
     const LetterboxDebugInfo& lbInfo)
 {
     if (!m_hDebugWnd || !IsWindow(m_hDebugWnd)) return;
@@ -617,13 +616,11 @@ void LR2BGAWindow::UpdateDebugInfo(
     if (m_pSettings->m_autoRemoveLetterbox) {
         swprintf_s(lbDetailStr, sizeof(lbDetailStr)/sizeof(wchar_t),
             L"[Auto Letterbox Removal]\r\n"
-            L"  LB Exceptions: %ld\r\n"
             L"  LB Mode: %s\r\n"
             L"  Stability: %d / %d\r\n"
             L"  Center Black: %s (%.1f%%)\r\n"
             L"  16:9 Check: %s (Top: %.1f%%, Btm: %.1f%%)%s\r\n"
             L"  4:3 Check: %s (Top: %.1f%%, Btm: %.1f%%)%s\r\n\r\n",
-            exceptionCount,
             lbModeStr,
             lbInfo.stabilityCounter, lbInfo.stabilityThreshold,
             lbInfo.isCenterBlack ? L"Yes" : L"No", lbInfo.centerBlackRatio * 100.0f,

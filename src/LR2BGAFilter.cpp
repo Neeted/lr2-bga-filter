@@ -129,7 +129,7 @@ CLR2BGAFilter::CLR2BGAFilter(LPUNKNOWN pUnk, HRESULT *phr)
       m_mode(MODE_RESIZE) // デフォルト: リサイズモード
       ,
       m_inputWidth(0), m_inputHeight(0), m_inputBitCount(32),
-      m_lastOutputTime(0), m_droppedFrames(0), m_exceptionCount(0),
+      m_lastOutputTime(0), m_droppedFrames(0),
       m_dummySent(false), m_lastDummyTime(0), m_frameCount(0),
       m_inputFrameCount(0), m_totalProcessTime(0), m_avgProcessTime(0.0),
       m_frameRate(0.0), m_outputFrameRate(0.0), m_bConfigMode(FALSE)
@@ -673,7 +673,7 @@ STDMETHODIMP CLR2BGAFilter::ResetPerformanceStatistics() {
   m_avgProcessTime = 0.0;
   m_lastOutputTime = 0;     // タイミング計測リセット
   m_droppedFrames = 0;
-  m_exceptionCount = 0;
+  m_totalProcessTime = 0;
   return S_OK;
 }
 
@@ -1168,7 +1168,7 @@ void CLR2BGAFilter::UpdateDebugInfo() {
       inputName, outputName, graphInfo, m_inputWidth, m_inputHeight,
       m_inputBitCount, m_pSettings->m_outputWidth, m_pSettings->m_outputHeight,
       m_frameRate, m_outputFrameRate, m_frameCount, m_droppedFrames,
-      m_avgProcessTime, m_exceptionCount, m_lbDetector.GetDebugInfo());
+      m_avgProcessTime, m_lbDetector.GetDebugInfo());
 }
 
 // 上流のフィルタ名を再帰的に取得するヘルパー
@@ -1297,32 +1297,6 @@ void CLR2BGAFilter::FocusLR2Window() { m_pWindow->FocusLR2Window(); }
 // アーキテクチャ:
 //   - イベント駆動型 (Event-Driven): m_hLBRequestEvent
 //   がシグナルされるまで待機します。
-//   - 共有バッファ: メインスレッドから渡された画像データ (m_lbBuffer)
-//   を解析します。
-//   - 結果通知: 解析結果は m_currentLBMode
-//   に格納され、メインスレッドが参照します。
-//
-// 安全性:
-//   - SEH (構造化例外処理)
-//   を使用して、画像データの不正アクセスによるクラッシュを防ぎます。
-// ------------------------------------------------------------------------------
-// SEH例外をC++例外から分離するためのヘルパー
-LetterboxMode CLR2BGAFilter::SafeAnalyzeFrame(BYTE *pBuffer, size_t bufferSize,
-                                              long width, long height,
-                                              long stride, int bpp) {
-  LetterboxMode mode = LB_MODE_ORIGINAL;
-  __try {
-    mode = m_lbDetector.AnalyzeFrame(pBuffer, bufferSize, width, height, stride,
-                                     bpp);
-  } __except (EXCEPTION_EXECUTE_HANDLER) {
-    OutputDebugStringA("LR2BGAFilter: Exception in AnalyzeFrame!\n");
-    // デバッグ表示用の例外カウントをインクリメント
-    InterlockedIncrement((volatile LONG *)&m_exceptionCount);
-    mode = LB_MODE_ORIGINAL;
-  }
-  return mode;
-}
-
 // ------------------------------------------------------------------------------
 // LetterboxThread - 非同期解析スレッド
 // ------------------------------------------------------------------------------
@@ -1389,8 +1363,8 @@ void CLR2BGAFilter::LetterboxThread() {
        // logic preserved from original
     }
 
-    // Analyze
-    LetterboxMode mode = SafeAnalyzeFrame(workBuffer.data(), (size_t)calcSize, w, h, s, bpp);
+    // 解析実行 (パラメータ検証済みなのでSEH不要)
+    LetterboxMode mode = m_lbDetector.AnalyzeFrame(workBuffer.data(), (size_t)calcSize, w, h, s, bpp);
 
     {
         std::lock_guard<std::mutex> lock(m_mtxLBMode);

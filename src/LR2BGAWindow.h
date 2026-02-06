@@ -70,7 +70,6 @@ public:
         double frameRate, double outputFrameRate,
         long long frameCount, long long droppedFrames,
         double avgTime,
-        long exceptionCount,
         const LetterboxDebugInfo& lbInfo);
 
     // LR2連携: LR2本体ウィンドウへのフォーカス復帰
