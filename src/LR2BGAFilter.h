@@ -333,9 +333,22 @@ public:
   LR2BGAWindow *m_pWindow;     // ウィンドウマネージャ
 
   // レターボックス検出 (Letterbox Detection)
+  //--------------------------------------------------------------------------
+  // ロック階層 (Lock Hierarchy) - デッドロック防止のためのルール
+  //--------------------------------------------------------------------------
+  // 複数のミューテックスを必要とする場合、必ず以下の順序で取得すること:
+  //   1. m_csReceive     (最外側: DirectShow BaseClass のクリティカルセクション)
+  //   2. m_mtxLBControl  (レターボックス検出スレッド制御)
+  //   3. m_mtxLBBuffer   (検出用バッファへのアクセス)
+  //   4. m_mtxLBMode     (最内側: 現在のレターボックスモード)
+  //
+  // 注意:
+  //   - ロックを保持したまま GUI 操作 (SendMessage 等) を行わないこと。
+  //   - ロックのスコープはできるだけ短くすること。
+  //--------------------------------------------------------------------------
   LR2BGALetterboxDetector m_lbDetector;
-  std::mutex m_mtxLBMode;
-  std::mutex m_mtxLBBuffer;
+  std::mutex m_mtxLBMode;     // 4. 最内側: m_currentLBMode へのアクセス保護
+  std::mutex m_mtxLBBuffer;   // 3. m_lbBuffer へのアクセス保護
   LetterboxMode m_currentLBMode;
 
   // 非同期検出スレッド (Async Detection Thread)

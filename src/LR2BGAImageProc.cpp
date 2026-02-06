@@ -1,6 +1,12 @@
 ﻿#include "LR2BGAImageProc.h"
 #include "LR2BGACPU.h"
 
+//------------------------------------------------------------------------------
+// 定数定義 (Constants)
+//------------------------------------------------------------------------------
+constexpr int kMaxBrightness = 255;             // 最大輝度値 (8bit)
+constexpr int kMaxBrightnessPercent = 100;      // 最大輝度 (%)
+
 // Static Initializations
 LR2BGAImageProc::ResizeFunc LR2BGAImageProc::pResizeNearest = LR2BGAImageProc::ResizeNearestNeighbor_Cpp;
 LR2BGAImageProc::ResizeFunc LR2BGAImageProc::pResizeBilinear = LR2BGAImageProc::ResizeBilinear_Cpp;
@@ -609,7 +615,7 @@ void LR2BGAImageProc::ResizeBilinear_CppOpt(
 // ------------------------------------------------------------------------------
 void LR2BGAImageProc::ApplyBrightness(BYTE* pData, int width, int height, int stride, int brightness)
 {
-    if (brightness >= 100) return; // No change
+    if (brightness >= kMaxBrightnessPercent) return; // No change
     if (brightness <= 0) {
         // Blackout
         // Check if pitch is tight
@@ -625,8 +631,8 @@ void LR2BGAImageProc::ApplyBrightness(BYTE* pData, int width, int height, int st
 
     // Lookup table for speed (0-255 -> 0-255)
     BYTE lut[256];
-    for (int i = 0; i < 256; i++) {
-        lut[i] = (BYTE)(i * brightness / 100);
+    for (int i = 0; i <= kMaxBrightness; i++) {
+        lut[i] = (BYTE)(i * brightness / kMaxBrightnessPercent);
     }
 
     for (int y = 0; y < height; y++) {

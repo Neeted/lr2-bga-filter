@@ -18,6 +18,7 @@ void LR2BGACPU::CheckFeatures() {
 
     // Check for AVX2
     // Must check OSXSAVE bit first (ECX bit 27 of CPUID EAX=1)
+    // AVX2の確認には、まずOSXSAVEビット(CPUID EAX=1のECX bit 27)をチェックする必要があります
     bool osxsave = (ids[2] & (1 << 27)) != 0;
     
     if (osxsave) {

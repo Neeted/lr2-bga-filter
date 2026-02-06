@@ -12,6 +12,13 @@
 #include <tlhelp32.h>
 
 //------------------------------------------------------------------------------
+// 定数定義 (Constants)
+// マジックナンバーを避け、意図を明確にするための名前付き定数
+//------------------------------------------------------------------------------
+constexpr DWORD kLetterboxCheckIntervalMs = 200;  // 黒帯検出の頻度制限 (ms)
+constexpr DWORD kMaxSleepMs = 1000;               // FPS制限用Sleep上限 (ms)
+
+//------------------------------------------------------------------------------
 // フィルタ情報 (Filter Information)
 //------------------------------------------------------------------------------
 static const AMOVIESETUP_MEDIATYPE sudInputTypes[] = {
@@ -1420,9 +1427,9 @@ void CLR2BGAFilter::ProcessLetterboxDetection(const BYTE* pSrcData, long actualD
         return;
     }
 
-    // 頻度制限 (200ms)
+    // 頻度制限
     DWORD now = GetTickCount();
-    if (now - m_lastLBRequestTime < 200) {
+    if (now - m_lastLBRequestTime < kLetterboxCheckIntervalMs) {
        // Skip
     } else {
         m_lastLBRequestTime = now;
@@ -1496,7 +1503,7 @@ HRESULT CLR2BGAFilter::WaitFPSLimit(REFERENCE_TIME rtStart, REFERENCE_TIME rtEnd
         if (rtEnd > rtStart) {
             waitMs = (DWORD)((rtEnd - rtStart) / 10000);
         }
-        if (waitMs > 0 && waitMs < 1000) {
+        if (waitMs > 0 && waitMs < kMaxSleepMs) {
             Sleep(waitMs);
         }
         m_droppedFrames++;
@@ -1546,7 +1553,7 @@ HRESULT CLR2BGAFilter::FillOutputBuffer(const BYTE* pSrcData, BYTE* pDstData,
         } else {
             DWORD waitMs = 0;
             if (rtEnd > rtStart) waitMs = (DWORD)((rtEnd - rtStart) / 10000);
-            if (waitMs > 0 && waitMs < 1000) Sleep(waitMs);
+            if (waitMs > 0 && waitMs < kMaxSleepMs) Sleep(waitMs);
             return S_FALSE; // Wait and skip
         }
     }
