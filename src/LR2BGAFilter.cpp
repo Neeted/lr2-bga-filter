@@ -1253,6 +1253,37 @@ std::wstring CLR2BGAFilter::GetFilterGraphInfo() {
   return info;
 }
 
+STDMETHODIMP CLR2BGAFilter::GetDebugWindowRect(int *pX, int *pY, int *pWidth, int *pHeight) {
+  CheckPointer(pX, E_POINTER);
+  CheckPointer(pY, E_POINTER);
+  CheckPointer(pWidth, E_POINTER);
+  CheckPointer(pHeight, E_POINTER);
+  if (m_pSettings) {
+    m_pSettings->Lock();
+    *pX = m_pSettings->m_debugWindowX;
+    *pY = m_pSettings->m_debugWindowY;
+    *pWidth = m_pSettings->m_debugWindowWidth;
+    *pHeight = m_pSettings->m_debugWindowHeight;
+    m_pSettings->Unlock();
+    return S_OK;
+  }
+  return E_FAIL;
+}
+
+STDMETHODIMP CLR2BGAFilter::SetDebugWindowRect(int x, int y, int width, int height) {
+  if (m_pSettings) {
+    m_pSettings->Lock();
+    m_pSettings->m_debugWindowX = x;
+    m_pSettings->m_debugWindowY = y;
+    m_pSettings->m_debugWindowWidth = width;
+    m_pSettings->m_debugWindowHeight = height;
+    m_pSettings->Save(); // 即時保存
+    m_pSettings->Unlock();
+    return S_OK;
+  }
+  return E_FAIL;
+}
+
 void CLR2BGAFilter::FocusLR2Window() { m_pWindow->FocusLR2Window(); }
 
 // ------------------------------------------------------------------------------

@@ -148,6 +148,10 @@ DECLARE_INTERFACE_(ILR2BGAFilterSettings, IUnknown) {
   STDMETHOD(GetAutoRemoveLetterbox)(THIS_ BOOL * pEnabled) PURE;
   STDMETHOD(SetAutoRemoveLetterbox)(THIS_ BOOL enabled) PURE;
 
+  // デバッグウィンドウ位置設定
+  STDMETHOD(GetDebugWindowRect)(THIS_ int *pX, int *pY, int *pWidth, int *pHeight) PURE;
+  STDMETHOD(SetDebugWindowRect)(THIS_ int x, int y, int width, int height) PURE;
+
   STDMETHOD(GetLetterboxThreshold)(THIS_ int *pThreshold) PURE;
   STDMETHOD(SetLetterboxThreshold)(THIS_ int threshold) PURE;
 
@@ -258,6 +262,9 @@ public:
 
   STDMETHOD(GetAutoRemoveLetterbox)(BOOL *pAutoRemove) override;
   STDMETHOD(SetAutoRemoveLetterbox)(BOOL autoRemove) override;
+
+  STDMETHOD(GetDebugWindowRect)(int *pX, int *pY, int *pWidth, int *pHeight) override;
+  STDMETHOD(SetDebugWindowRect)(int x, int y, int width, int height) override;
 
   STDMETHOD(GetLetterboxThreshold)(int *pThreshold) override;
   STDMETHOD(SetLetterboxThreshold)(int threshold) override;

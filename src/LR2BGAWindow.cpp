@@ -679,6 +679,8 @@ LRESULT CALLBACK LR2BGAWindow::DebugWndProc(HWND hwnd, UINT msg, WPARAM wParam, 
     switch (msg) {
     case WM_CREATE:
         {
+
+
             CreateWindowW(L"BUTTON", L"Copy Info",
                 WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
                 10, 10, 100, 30, hwnd, (HMENU)101, g_hInst, NULL);
@@ -687,6 +689,46 @@ LRESULT CALLBACK LR2BGAWindow::DebugWndProc(HWND hwnd, UINT msg, WPARAM wParam, 
                 WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
                 120, 10, 100, 30, hwnd, (HMENU)IDC_BUTTON_OPEN_SETTINGS, g_hInst, NULL); // IDC from resource.h
         }
+        return 0;
+
+    case WM_EXITSIZEMOVE:
+        // ユーザー要望により保存は WM_DESTROY 時のみ行う
+        /*
+        if (pThis && pThis->m_pSettings) {
+            RECT rc;
+            if (GetWindowRect(hwnd, &rc)) {
+                pThis->m_pSettings->Lock();
+                pThis->m_pSettings->m_debugWindowX = rc.left;
+                pThis->m_pSettings->m_debugWindowY = rc.top;
+                pThis->m_pSettings->m_debugWindowWidth = rc.right - rc.left;
+                pThis->m_pSettings->m_debugWindowHeight = rc.bottom - rc.top;
+                pThis->m_pSettings->Save();
+                pThis->m_pSettings->Unlock();
+            }
+        }
+        */
+        return 0;
+
+    case WM_DESTROY:
+        if (pThis && pThis->m_pSettings) {
+             // 最大化・最小化されていない場合のみ保存
+            WINDOWPLACEMENT wp = { sizeof(WINDOWPLACEMENT) };
+            if (GetWindowPlacement(hwnd, &wp) && wp.showCmd == SW_SHOWNORMAL) {
+                RECT rc;
+                if (GetWindowRect(hwnd, &rc)) {
+                    pThis->m_pSettings->Lock();
+                    pThis->m_pSettings->m_debugWindowX = rc.left;
+                    pThis->m_pSettings->m_debugWindowY = rc.top;
+                    pThis->m_pSettings->m_debugWindowWidth = rc.right - rc.left;
+                    pThis->m_pSettings->m_debugWindowHeight = rc.bottom - rc.top;
+                    pThis->m_pSettings->Save();
+                    pThis->m_pSettings->Unlock();
+                }
+            }
+        }
+        // GWLP_USERDATA をクリア
+        SetWindowLongPtr(hwnd, GWLP_USERDATA, 0);
+        PostQuitMessage(0);
         return 0;
 
     case WM_COMMAND:
@@ -770,9 +812,7 @@ LRESULT CALLBACK LR2BGAWindow::DebugWndProc(HWND hwnd, UINT msg, WPARAM wParam, 
         // DestroyWindow to ensure thread exit
         DestroyWindow(hwnd); 
         return 0;
-    case WM_DESTROY:
-        PostQuitMessage(0);
-        return 0;
+
     }
     return DefWindowProcW(hwnd, msg, wParam, lParam);
 }
@@ -789,10 +829,22 @@ void LR2BGAWindow::DebugWindowThread()
     wc.lpszClassName = DEBUG_WND_CLASS;
     RegisterClassExW(&wc);
 
-    // this を lpParam として渡す
+    // 設定から初期位置を取得
+    int x = CW_USEDEFAULT, y = CW_USEDEFAULT;
+    int w = 450, h = 1000;
+    
+    if (m_pSettings) {
+        m_pSettings->Lock();
+        x = m_pSettings->m_debugWindowX;
+        y = m_pSettings->m_debugWindowY;
+        w = m_pSettings->m_debugWindowWidth;
+        h = m_pSettings->m_debugWindowHeight;
+        m_pSettings->Unlock();
+    }
+
     HWND hwnd = CreateWindowExW(0, DEBUG_WND_CLASS, L"LR2 BGA Filter Info",
         WS_OVERLAPPEDWINDOW, // WS_VISIBLE を削除
-        CW_USEDEFAULT, CW_USEDEFAULT, 450, 1000,
+        x, y, w, h,
         NULL, NULL, g_hInst, this);
 
     if (hwnd) {
