@@ -126,21 +126,9 @@ BOOL APIENTRY DllMain(HINSTANCE hModule, DWORD dwReason, LPVOID lpReserved) {
 
 CLR2BGAFilter::CLR2BGAFilter(LPUNKNOWN pUnk, HRESULT *phr)
     : CTransformFilter(NAME("LR2 BGA Filter"), pUnk, CLSID_LR2BGAFilter),
-      m_mode(MODE_RESIZE) // デフォルト: リサイズモード
-      ,
-      m_inputWidth(0), m_inputHeight(0), m_inputBitCount(32),
-      m_lastOutputTime(0), m_droppedFrames(0),
-      m_dummySent(false), m_lastDummyTime(0), m_frameCount(0),
-      m_inputFrameCount(0), m_totalProcessTime(0), m_avgProcessTime(0.0),
-      m_frameRate(0.0), m_outputFrameRate(0.0), m_bConfigMode(FALSE)
-      // レターボックス検出初期化
-      ,
-      m_currentLBMode(LB_MODE_ORIGINAL), 
-      m_bLBExit(false), m_bLBRequest(false),
-      m_lbWidth(0),
-      m_lbHeight(0), m_lbStride(0), m_lbBpp(0), m_lbRequestPending(false) {
-  // イベント・スレッドはメンバ初期化子で初期化済み
-
+      m_pSettings(NULL), m_pWindow(NULL), m_bConfigMode(FALSE),
+      m_pTransformLogic(new LR2BGATransformLogic(NULL, NULL)) // Settings/Window are set later? No, usually in constructor.
+{
   // 設定マネージャ初期化
   m_pSettings = new LR2BGASettings();
   m_pSettings->Load();
@@ -150,6 +138,9 @@ CLR2BGAFilter::CLR2BGAFilter(LPUNKNOWN pUnk, HRESULT *phr)
   // プロパティページ用に IUnknown を渡す (IBaseFilter は IUnknown を継承)
   m_pWindow->SetFilter(static_cast<IBaseFilter *>(this));
 
+  // TransformLogicの再初期化（設定とウィンドウを渡す）
+  m_pTransformLogic.reset(new LR2BGATransformLogic(m_pSettings, m_pWindow));
+
   if (phr) {
     *phr = S_OK;
   }
@@ -158,14 +149,7 @@ CLR2BGAFilter::CLR2BGAFilter(LPUNKNOWN pUnk, HRESULT *phr)
 CLR2BGAFilter::~CLR2BGAFilter() {
   // レターボックス検出スレッド停止
   // レターボックス検出スレッドが終了していることを確認
-  if (m_threadLB.joinable()) {
-      {
-          std::lock_guard<std::mutex> lock(m_mtxLBControl);
-          m_bLBExit = true;
-          m_cvLB.notify_one();
-      }
-      m_threadLB.join();
-  }
+  m_pTransformLogic->StopLetterboxThread();
 
   // std::mutex destroy is automatic
 
@@ -179,6 +163,8 @@ CLR2BGAFilter::~CLR2BGAFilter() {
     delete m_pSettings;
     m_pSettings = NULL;
   }
+
+  // m_pTransformLogic is unique_ptr, auto deleted
 }
 
 CUnknown *WINAPI CLR2BGAFilter::CreateInstance(LPUNKNOWN pUnk, HRESULT *phr) {
@@ -317,7 +303,7 @@ STDMETHODIMP CLR2BGAFilter::GetDummyMode(BOOL *pDummy) {
 
 STDMETHODIMP CLR2BGAFilter::SetDummyMode(BOOL dummy) {
   m_pSettings->m_dummyMode = (dummy != FALSE);
-  m_dummySent = false; // Reset on mode change
+  m_pTransformLogic->ResetDummySent(); // Reset on mode change
   m_pSettings->Save();
   return S_OK;
 }
@@ -618,11 +604,7 @@ STDMETHODIMP CLR2BGAFilter::SetAutoRemoveLetterbox(BOOL enabled) {
   m_pSettings->Unlock();
   m_pSettings->Save();
 
-  m_lbDetector.Reset();
-  {
-      std::lock_guard<std::mutex> lock(m_mtxLBMode);
-      m_currentLBMode = LB_MODE_ORIGINAL;
-  }
+  m_pTransformLogic->ResetLetterboxState();
 
   return S_OK;
 }
@@ -642,7 +624,7 @@ STDMETHODIMP CLR2BGAFilter::SetLetterboxThreshold(int threshold) {
   m_pSettings->Save();
 
   // 検出器の設定を更新
-  m_lbDetector.SetParams(threshold, m_pSettings->m_lbStability);
+  m_pTransformLogic->GetDetector().SetParams(threshold, m_pSettings->m_lbStability);
   return S_OK;
 }
 
@@ -661,19 +643,12 @@ STDMETHODIMP CLR2BGAFilter::SetLetterboxStability(int stability) {
   m_pSettings->Save();
 
   // 検出器の設定を更新
-  m_lbDetector.SetParams(m_pSettings->m_lbThreshold, stability);
+  m_pTransformLogic->GetDetector().SetParams(m_pSettings->m_lbThreshold, stability);
   return S_OK;
 }
 
 STDMETHODIMP CLR2BGAFilter::ResetPerformanceStatistics() {
-  m_frameCount = 0;
-  m_processedFrameCount = 0;
-  m_inputFrameCount = 0;
-  m_totalProcessTime = 0;
-  m_avgProcessTime = 0.0;
-  m_lastOutputTime = 0;     // タイミング計測リセット
-  m_droppedFrames = 0;
-  m_totalProcessTime = 0;
+  m_pTransformLogic->ResetStatistics();
   return S_OK;
 }
 
@@ -744,30 +719,6 @@ HRESULT CLR2BGAInputPin::CheckConnect(IPin *pPin) {
 // StartStreaming - ストリーミング開始
 //------------------------------------------------------------------------------
 HRESULT CLR2BGAFilter::StartStreaming() {
-  // レターボックス検出の状態をリセット (除外フラグのクリア等)
-  m_lbDetector.Reset();
-  
-  // 設定値を反映
-  m_lbDetector.SetParams(m_pSettings->m_lbThreshold, m_pSettings->m_lbStability);
-
-  m_frameCount = 0;
-  m_processedFrameCount = 0;
-  m_inputFrameCount = 0;
-  m_totalProcessTime = 0;
-  m_avgProcessTime = 0.0;
-  m_lastOutputTime = 0;
-
-  // ダミーモードの状態をリセット
-  m_dummySent = false;
-  m_lastDummyTime = 0;
-
-  // 設定値をストリーミング期間中ラッチ（固定）する
-  // 再生中にパススルー設定などが変更されるとバッファサイズ不整合でクラッシュするのを防ぐため
-  m_activePassthrough = m_pSettings->m_passthroughMode;
-  m_activeDummy = m_pSettings->m_dummyMode;
-  m_activeWidth = m_pSettings->m_outputWidth;
-  m_activeHeight = m_pSettings->m_outputHeight;
-
   // 設定画面の自動オープン
   if (!m_bConfigMode && m_pSettings->m_autoOpenSettings && m_pWindow) {
     m_pWindow->ShowPropertyPage();
@@ -778,11 +729,11 @@ HRESULT CLR2BGAFilter::StartStreaming() {
     m_pWindow->ShowExternalWindow();
   }
 
-  // レターボックス検出スレッドを開始
-  m_bLBExit = false;
-  m_bLBRequest = false;
-  m_lbBuffer.resize(256 * 256 * 4);
-  m_threadLB = std::thread(&CLR2BGAFilter::LetterboxThread, this);
+  // TransformLogic開始
+  m_pTransformLogic->StartStreaming(m_inputWidth, m_inputHeight, m_inputBitCount,
+                                    m_pSettings->m_outputWidth, m_pSettings->m_outputHeight);
+  // レターボックス検出スレッドを開始 (Logic側)
+  m_pTransformLogic->StartLetterboxThread();
 
   return CTransformFilter::StartStreaming();
 }
@@ -794,29 +745,19 @@ HRESULT CLR2BGAFilter::StopStreaming() {
   CAutoLock lock(&m_csReceive);
 
   // レターボックス検出スレッドを停止
-  if (m_threadLB.joinable()) {
-      {
-          std::lock_guard<std::mutex> lock(m_mtxLBControl);
-          m_bLBExit = true;
-          m_cvLB.notify_one();
-      }
-      m_threadLB.join();
-  }
+  m_pTransformLogic->StopLetterboxThread();
+  
+  // TransformLogic停止
+  m_pTransformLogic->StopStreaming();
 
-  m_pWindow->CloseExternalWindow(); // 外部ウィンドウを確実に閉じる
+  // 外部ウィンドウを非表示にする
+  if (m_pWindow) {
+    m_pWindow->CloseExternalWindow();
+  }
   return CTransformFilter::StopStreaming();
 }
 
-//------------------------------------------------------------------------------
-// EndOfStream - ストリーム終了時に呼び出される
-//------------------------------------------------------------------------------
-HRESULT CLR2BGAFilter::EndOfStream() {
-  // ストリーム終了直後に外部ウィンドウを閉じる
-  m_pWindow->CloseExternalWindow();
-
-  // 親クラスの処理を呼び出し
-  return CTransformFilter::EndOfStream();
-}
+// EndOfStream implementation is removed as base class handles it
 
 //------------------------------------------------------------------------------
 // CheckInputType - 入力メディアタイプのチェック
@@ -1054,12 +995,12 @@ HRESULT CLR2BGAFilter::Transform(IMediaSample *pIn, IMediaSample *pOut) {
   int dstStride = ((dstWidth * 3 + 3) & ~3);
 
   // -------------------------------------------------------------------------
-  // 黒帯除去ロジック (Helper Call)
+  // 黒帯除去ロジック (Delegated to TransformLogic)
   // -------------------------------------------------------------------------
   RECT srcRect = {0, 0, srcWidth, srcHeight};
   RECT *pSrcRect = NULL;
   
-  ProcessLetterboxDetection(pSrcData, pIn->GetActualDataLength(), srcWidth, srcHeight, srcStride, srcBitCount, srcRect, pSrcRect);
+  m_pTransformLogic->ProcessLetterboxDetection(pSrcData, pIn->GetActualDataLength(), srcWidth, srcHeight, srcStride, srcBitCount, srcRect, pSrcRect);
 
   // -------------------------------------------------------------------------
   // 外部ウィンドウ更新
@@ -1073,12 +1014,12 @@ HRESULT CLR2BGAFilter::Transform(IMediaSample *pIn, IMediaSample *pOut) {
   UpdateDebugInfo();
 
   // -------------------------------------------------------------------------
-  // FPS制限 (Helper Call)
+  // FPS制限 (Delegated to TransformLogic)
   // -------------------------------------------------------------------------
   LARGE_INTEGER midTime;
   QueryPerformanceCounter(&midTime);
 
-  hr = WaitFPSLimit(rtStart, rtEnd);
+  hr = m_pTransformLogic->WaitFPSLimit(rtStart, rtEnd);
   if (hr == S_FALSE) {
       // FPS制限でスキップされた場合でも、ここまでの処理時間を記録する
       // (WaitFPSLimit内のSleep時間は含まない)
@@ -1088,13 +1029,17 @@ HRESULT CLR2BGAFilter::Transform(IMediaSample *pIn, IMediaSample *pOut) {
   }
 
   // -------------------------------------------------------------------------
-  // 出力バッファ生成 (Helper Call: Dummy/Passthrough/Resize)
+  // 出力バッファ生成 (Delegated to TransformLogic)
   // -------------------------------------------------------------------------
   LARGE_INTEGER midTime2;
   QueryPerformanceCounter(&midTime2);
 
-  hr = FillOutputBuffer(pSrcData, pDstData, srcWidth, srcHeight, srcStride, srcBitCount,
-                        dstWidth, dstHeight, dstStride, pSrcRect, rtStart, rtEnd, pOut);
+  long outDataLen = 0;
+  hr = m_pTransformLogic->FillOutputBuffer(pSrcData, pDstData, srcWidth, srcHeight, srcStride, srcBitCount,
+                                           dstWidth, dstHeight, dstStride, pSrcRect, rtStart, rtEnd, outDataLen);
+  pOut->SetActualDataLength(outDataLen);
+  pOut->SetTime(&rtStart, &rtEnd);
+  pOut->SetSyncPoint(TRUE);
   
   if (hr == S_FALSE) {
       // ダミーモード待機などでスキップされた場合
@@ -1167,8 +1112,8 @@ void CLR2BGAFilter::UpdateDebugInfo() {
   m_pWindow->UpdateDebugInfo(
       inputName, outputName, graphInfo, m_inputWidth, m_inputHeight,
       m_inputBitCount, m_pSettings->m_outputWidth, m_pSettings->m_outputHeight,
-      m_frameRate, m_outputFrameRate, m_frameCount, m_droppedFrames,
-      m_avgProcessTime, m_lbDetector.GetDebugInfo());
+      m_frameRate, m_outputFrameRate, m_frameCount, m_pTransformLogic->GetDroppedFrames(),
+      m_avgProcessTime, m_pTransformLogic->GetDetector().GetDebugInfo());
 }
 
 // 上流のフィルタ名を再帰的に取得するヘルパー
@@ -1300,77 +1245,13 @@ void CLR2BGAFilter::FocusLR2Window() { m_pWindow->FocusLR2Window(); }
 // ------------------------------------------------------------------------------
 // LetterboxThread - 非同期解析スレッド
 // ------------------------------------------------------------------------------
-void CLR2BGAFilter::LetterboxThread() {
-  std::vector<BYTE> workBuffer;
+// LetterboxThread は TransformLogic に移動
+void CLR2BGAFilter::StartLetterboxThread() {
+    if(m_pTransformLogic) m_pTransformLogic->StartLetterboxThread();
+}
 
-  while (true) {
-    // 待機 (Wait for Request or Exit)
-    {
-        std::unique_lock<std::mutex> lock(m_mtxLBControl);
-        m_cvLB.wait(lock, [this] { return m_bLBRequest || m_bLBExit; });
-        
-        if (m_bLBExit) break; // Exit
-        
-        // リクエスト処理開始
-        m_bLBRequest = false; 
-    }
-
-    // 解析リクエスト処理
-    int w = 0, h = 0, s = 0, bpp = 0;
-    size_t srcSize = 0;
-
-    // 1. パラメータを安全にコピー
-    {
-        std::lock_guard<std::mutex> lock(m_mtxLBBuffer);
-        w = m_lbWidth;
-        h = m_lbHeight;
-        s = m_lbStride;
-        bpp = m_lbBpp;
-        srcSize = m_lbBuffer.size();
-    }
-
-    // 基本的なパラメータ検証
-    if (w <= 0 || h <= 0 || s <= 0 || srcSize == 0) {
-      continue;
-    }
-
-    // 作業用バッファの準備
-    try {
-      if (workBuffer.size() < srcSize) {
-        workBuffer.resize(srcSize);
-      }
-    } catch (...) {
-      continue;
-    }
-
-    // コピーサイズ計算
-    int calcSize = s * h;
-    int copySize = (calcSize > (int)srcSize) ? (int)srcSize : calcSize;
-
-    if (copySize > 0) {
-        // 安全にコピー
-        std::lock_guard<std::mutex> lock(m_mtxLBBuffer);
-        if (m_lbBuffer.size() >= (size_t)copySize) {
-             CopyMemory(workBuffer.data(), m_lbBuffer.data(), copySize);
-        }
-    }
-
-    if (copySize <= 0) continue;
-
-    // Zero fill (Safety constraint)
-    if ((size_t)calcSize > workBuffer.size()) {
-       // Only resize if strict need, but we already sized to srcSize.
-       // logic preserved from original
-    }
-
-    // 解析実行 (パラメータ検証済みなのでSEH不要)
-    LetterboxMode mode = m_lbDetector.AnalyzeFrame(workBuffer.data(), (size_t)calcSize, w, h, s, bpp);
-
-    {
-        std::lock_guard<std::mutex> lock(m_mtxLBMode);
-        m_currentLBMode = mode;
-    }
-  }
+void CLR2BGAFilter::StopLetterboxThread() {
+    if(m_pTransformLogic) m_pTransformLogic->StopLetterboxThread();
 }
 
 // ------------------------------------------------------------------------------
@@ -1394,65 +1275,7 @@ void CLR2BGAFilter::LetterboxThread() {
 //   srcRect          : 修正される矩形構造体 (参照)
 //   pSrcRect         : 修正された場合にセットされるポインタ (参照)
 // ------------------------------------------------------------------------------
-void CLR2BGAFilter::ProcessLetterboxDetection(const BYTE* pSrcData, long actualDataLength, int srcWidth, int srcHeight, 
-                                              int srcStride, int srcBitCount, 
-                                              RECT& srcRect, RECT*& pSrcRect) {
-    if (!m_pSettings->m_autoRemoveLetterbox) {
-        return;
-    }
-
-    // 頻度制限
-    DWORD now = GetTickCount();
-    if (now - m_lastLBRequestTime < kLetterboxCheckIntervalMs) {
-       // Skip
-    } else {
-        m_lastLBRequestTime = now;
-
-        LONG absSrcStride = std::abs(srcStride);
-        int calcSize = absSrcStride * srcHeight;
-        
-        // 安全性チェック
-        int safeSize = (actualDataLength > 0 && actualDataLength < calcSize) ? (int)actualDataLength : calcSize;
-
-        // メモリ範囲チェック
-        if (pSrcData && safeSize > 0) {
-            {
-                std::lock_guard<std::mutex> lock(m_mtxLBBuffer);
-                if (m_lbBuffer.size() < (size_t)safeSize) {
-                    m_lbBuffer.resize(safeSize);
-                }
-                CopyMemory(m_lbBuffer.data(), pSrcData, safeSize);
-                m_lbWidth = srcWidth;
-                m_lbHeight = srcHeight;
-                m_lbStride = absSrcStride;
-                m_lbBpp = srcBitCount;
-            }
-            {
-                std::lock_guard<std::mutex> lock(m_mtxLBControl);
-                m_bLBRequest = true;
-                m_cvLB.notify_one();
-            }
-        }
-    }
-
-    // 結果適用
-    LetterboxMode mode;
-    {
-        std::lock_guard<std::mutex> lock(m_mtxLBMode);
-        mode = m_currentLBMode;
-    }
-
-    if (mode != LB_MODE_ORIGINAL) {
-        float targetAspect = (mode == LB_MODE_16_9) ? (16.0f / 9.0f) : (4.0f / 3.0f);
-        LONG targetH = (LONG)(srcWidth / targetAspect);
-        LONG barH = (srcHeight - targetH) / 2;
-        if (barH > 0) {
-            srcRect.top = barH;
-            srcRect.bottom = srcHeight - barH;
-            pSrcRect = &srcRect;
-        }
-    }
-}
+// ProcessLetterboxDetection is moved to LR2BGATransformLogic
 
 // ------------------------------------------------------------------------------
 // Helper: WaitFPSLimit - FPS制限の実装
@@ -1465,27 +1288,7 @@ void CLR2BGAFilter::ProcessLetterboxDetection(const BYTE* pSrcData, long actualD
 //   S_OK    : 処理続行 (FPS制限内、または制限なし)
 //   S_FALSE : フレームスキップ (FPS制限によりドロップすべき)
 // ------------------------------------------------------------------------------
-HRESULT CLR2BGAFilter::WaitFPSLimit(REFERENCE_TIME rtStart, REFERENCE_TIME rtEnd) {
-    // FPS制限が無効、または設定値が不正(0以下)の場合は処理をスキップ
-    if (!m_pSettings->m_limitFPSEnabled || m_pSettings->m_maxFPS <= 0) {
-        return S_OK; // 制限なし
-    }
-
-    REFERENCE_TIME minInterval = 10000000LL / m_pSettings->m_maxFPS;
-    if (m_lastOutputTime > 0 && (rtStart - m_lastOutputTime) < minInterval) {
-        DWORD waitMs = 0;
-        if (rtEnd > rtStart) {
-            waitMs = (DWORD)((rtEnd - rtStart) / 10000);
-        }
-        if (waitMs > 0 && waitMs < kMaxSleepMs) {
-            Sleep(waitMs);
-        }
-        m_droppedFrames++;
-        return S_FALSE; // Skip
-    }
-    m_lastOutputTime = rtStart;
-    return S_OK;
-}
+// WaitFPSLimit is moved to LR2BGATransformLogic
 
 // ------------------------------------------------------------------------------
 // Helper: FillOutputBuffer - 出力バッファへの描画処理
@@ -1510,87 +1313,5 @@ HRESULT CLR2BGAFilter::WaitFPSLimit(REFERENCE_TIME rtStart, REFERENCE_TIME rtEnd
 //   rtStart / rtEnd     : タイムスタンプ参照（更新用）
 //   pOut                : 出力サンプル（データ長設定用）
 // ------------------------------------------------------------------------------
-HRESULT CLR2BGAFilter::FillOutputBuffer(const BYTE* pSrcData, BYTE* pDstData, 
-                                        int srcWidth, int srcHeight, int srcStride, int srcBitCount,
-                                        int dstWidth, int dstHeight, int dstStride, const RECT* pSrcRect,
-                                        REFERENCE_TIME& rtStart, REFERENCE_TIME& rtEnd, IMediaSample* pOut) {
-    // Dummy Mode
-    if (m_activeDummy) {
-        if (!m_dummySent) {
-            ZeroMemory(pDstData, dstStride * dstHeight);
-            pOut->SetActualDataLength(dstStride * dstHeight);
-            m_dummySent = true;
-            m_lastDummyTime = rtStart;
-            pOut->SetTime(&rtStart, &rtEnd);
-            pOut->SetSyncPoint(TRUE);
-            return S_OK;
-        } else {
-            DWORD waitMs = 0;
-            if (rtEnd > rtStart) waitMs = (DWORD)((rtEnd - rtStart) / 10000);
-            if (waitMs > 0 && waitMs < kMaxSleepMs) Sleep(waitMs);
-            return S_FALSE; // Wait and skip
-        }
-    }
-
-    // Passthrough
-    if (m_activePassthrough) {
-        if (srcBitCount == 32) {
-             for (int y = 0; y < srcHeight; y++) {
-                const BYTE *pSrcRow = pSrcData + y * srcStride;
-                BYTE *pDstRow = pDstData + y * dstStride;
-                for (int x = 0; x < srcWidth; x++) {
-                    pDstRow[x * 3 + 0] = pSrcRow[x * 4 + 0];
-                    pDstRow[x * 3 + 1] = pSrcRow[x * 4 + 1];
-                    pDstRow[x * 3 + 2] = pSrcRow[x * 4 + 2];
-                }
-            }
-        } else {
-            for (int y = 0; y < srcHeight; y++) {
-                CopyMemory(pDstData + y * dstStride, pSrcData + y * srcStride, srcWidth * 3);
-            }
-        }
-    } 
-    // Resize
-    else {
-        int effectiveSrcW = srcWidth;
-        int effectiveSrcH = srcHeight;
-        if (pSrcRect) {
-            effectiveSrcW = pSrcRect->right - pSrcRect->left;
-            effectiveSrcH = pSrcRect->bottom - pSrcRect->top;
-        }
-
-        int actualW, actualH, offX, offY;
-        LR2BGAImageProc::CalculateResizeDimensions(
-            effectiveSrcW, effectiveSrcH, dstWidth, dstHeight,
-            m_pSettings->m_keepAspectRatio, 
-            actualW, actualH, offX, offY);
-
-        if (actualW < dstWidth || actualH < dstHeight) {
-            ZeroMemory(pDstData, dstStride * dstHeight);
-        }
-
-        if (m_pSettings->m_resizeAlgo == RESIZE_NEAREST) {
-            LR2BGAImageProc::ResizeNearestNeighbor(
-                pSrcData, srcWidth, srcHeight, srcStride, srcBitCount, pDstData,
-                dstWidth, dstHeight, dstStride, 24, actualW, actualH, offX, offY,
-                pSrcRect, m_lutXIndices);
-        } else {
-            LR2BGAImageProc::ResizeBilinear(
-                pSrcData, srcWidth, srcHeight, srcStride, srcBitCount, pDstData,
-                dstWidth, dstHeight, dstStride, 24, actualW, actualH, offX, offY,
-                pSrcRect, m_lutXIndices, m_lutXWeights);
-        }
-    }
-
-    // Brightness
-    if (m_pSettings->m_brightnessLR2 < 100) {
-        LR2BGAImageProc::ApplyBrightness(pDstData, dstWidth, dstHeight, dstStride, m_pSettings->m_brightnessLR2);
-    }
-
-    pOut->SetActualDataLength(dstStride * dstHeight);
-    pOut->SetTime(&rtStart, &rtEnd);
-    pOut->SetSyncPoint(TRUE);
-
-    return S_OK;
-}
+// FillOutputBuffer is moved to LR2BGATransformLogic
 

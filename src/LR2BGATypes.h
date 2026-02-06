@@ -5,6 +5,7 @@
 #pragma once
 
 #include <windows.h>
+#include <strmif.h>
 
 extern HINSTANCE g_hInst;
 

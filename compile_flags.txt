@@ -1,5 +1,5 @@
 -xc++
--std=c++14
+-std=c++17
 --target=i686-pc-windows-msvc
 -fms-extensions
 -fms-compatibility
