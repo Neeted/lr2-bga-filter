@@ -33,6 +33,14 @@ static const wchar_t* EXT_WND_CLASS = L"LR2BGAFilterExtWnd";
 static const wchar_t* OVERLAY_WND_CLASS = L"LR2BGAFilterOverlayWnd";
 static const wchar_t* DEBUG_WND_CLASS = L"LR2BGAFilterDebugWnd";
 
+//------------------------------------------------------------------------------
+// 定数定義 (Constants)
+// マジックナンバーを避け、意図を明確にするための名前付き定数
+//------------------------------------------------------------------------------
+constexpr DWORD kInputMonitorIntervalMs = 50;   // 入力監視のポーリング間隔 (ms)
+constexpr DWORD kFocusRestoreDelayMs = 100;     // フォーカス復帰待機時間 (ms)
+constexpr int kDebugWindowButtonMargin = 50;    // デバッグウィンドウのボタン領域高さ (px)
+
 // Defined in LR2BGAFilter.h/cpp, but we declare it here to avoid circular include issues
 EXTERN_C const GUID CLSID_LR2BGAFilterPropertyPage;
 
@@ -758,7 +766,7 @@ LRESULT CALLBACK LR2BGAWindow::DebugWndProc(HWND hwnd, UINT msg, WPARAM wParam, 
                     DEFAULT_QUALITY, FIXED_PITCH, L"Consolas");
                 HGDIOBJ hOldFont = SelectObject(hMemDC, hFont);
                 
-                rect.top += 50; // Space for button
+                rect.top += kDebugWindowButtonMargin; // ボタン領域を確保
                 rect.left += 10; // Margin
                 
                 {
@@ -1013,7 +1021,7 @@ void LR2BGAWindow::InputMonitorThread()
         // これにより、CPU負荷を抑えつつ、停止要求には即座に応答できます。
         {
             std::unique_lock<std::mutex> lock(m_mtxInput);
-            if (m_cvInput.wait_for(lock, std::chrono::milliseconds(50), [this] { return m_bInputStop; })) {
+            if (m_cvInput.wait_for(lock, std::chrono::milliseconds(kInputMonitorIntervalMs), [this] { return m_bInputStop; })) {
                 if (m_bInputStop) break; // 停止要求があればループを抜ける
             }
         }

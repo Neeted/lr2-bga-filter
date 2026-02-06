@@ -1,11 +1,17 @@
 ﻿#include "LR2BGALetterboxDetector.h"
 
+//------------------------------------------------------------------------------
+// 定数定義 (Constants)
+//------------------------------------------------------------------------------
+constexpr int kDefaultBlackThreshold = 16;      // デフォルト閾値: 明るさ16未満を黒とみなす
+constexpr int kDefaultStabilityThreshold = 5;   // デフォルト安定化: 5回連続検出で確定
+
 LR2BGALetterboxDetector::LR2BGALetterboxDetector()
     : m_currentMode(LB_MODE_ORIGINAL), m_pendingMode(LB_MODE_ORIGINAL),
       m_stabilityCounter(0),
-      m_blackThreshold(16) // デフォルト閾値: 明るさ16未満を黒とみなす
+      m_blackThreshold(kDefaultBlackThreshold) // デフォルト閾値: 明るさ16未満を黒とみなす
       ,
-      m_stabilityThreshold(5) // デフォルト安定化: 5回連続検出で確定
+      m_stabilityThreshold(kDefaultStabilityThreshold) // デフォルト安定化: 5回連続検出で確定
       ,
       m_bRejected169(false), m_bRejected43(false) {
   // Init

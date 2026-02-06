@@ -1,4 +1,22 @@
-﻿#pragma once
+﻿//------------------------------------------------------------------------------
+// LR2BGAThreadPool.h
+// 汎用スレッドプール実装
+//
+// 概要:
+//   シングルトンパターンで実装されたスレッドプールクラスです。
+//   主に画像処理の並列化（ParallelFor）に使用します。
+//
+// 使用法:
+//   LR2BGAThreadPool::Instance().ParallelFor(0, height, [&](int startY, int endY) {
+//       // 行 [startY, endY) を処理
+//   });
+//
+// 注意:
+//   - C++17 では std::result_of は非推奨です (std::invoke_result 推奨)
+//   - 本実装では互換性のため std::result_of を使用していますが、
+//     将来的に更新を検討してください。
+//------------------------------------------------------------------------------
+#pragma once
 
 #include <vector>
 #include <thread>
@@ -16,8 +34,8 @@ public:
         return instance;
     }
 
-    // Parallel For Loop
-    // Splits range [start, end) into chunks and executes func in parallel
+    // 並列Forループ
+    // 範囲 [start, end) をチャンクに分割し、各チャンクを並列実行します
     template<typename Function>
     void ParallelFor(int start, int end, Function func) {
         int range = end - start;
@@ -29,7 +47,7 @@ public:
              return;
         }
 
-        // Divide work
+        // 作業を分割
         int chunk = range / threadCount;
         int remainder = range % threadCount;
 
@@ -40,16 +58,8 @@ public:
             int currentChunk = chunk + (i < remainder ? 1 : 0);
             int currentEnd = currentStart + currentChunk;
             
-            // Should properly implement a task queue, but for simplicity/RAII with futures:
-            // Since we want this to block until done, we can use std::async if we didn't have a custom pool.
-            // But custom pool is better for persistent threads.
-            
-            // Simplified "Task" submission not implemented fully here for brevity in this snippet usually,
-            // but let's do it properly via Enqueue.
-            
-            // Wait, standard futures approach with a custom pool:
-            // passing a promise.
-            
+            // タスクをスレッドプールにエンキューし、futureで完了を待機
+            // カスタムスレッドプールにより、スレッド生成コストを抑制
             if (currentChunk > 0) {
                 futures.emplace_back(Enqueue([=] {
                     func(currentStart, currentEnd);
@@ -58,12 +68,13 @@ public:
             currentStart = currentEnd;
         }
 
+        // すべてのチャンクの完了を待機
         for (auto& f : futures) {
             f.wait();
         }
     }
 
-    // Enqueue a generic task
+    // 汎用タスクのエンキュー
     template<class F, class... Args>
     auto Enqueue(F&& f, Args&&... args) 
         -> std::future<typename std::result_of<F(Args...)>::type>
@@ -98,7 +109,7 @@ public:
 
 private:
     LR2BGAThreadPool() : stop(false) {
-        // Use hardware concurrency, but limit minimal/maximal reasonable count
+        // ハードウェアスレッド数を取得 (0の場合はフォールバック)
         unsigned int threads = std::thread::hardware_concurrency();
         if (threads == 0) threads = 4;
         
@@ -132,7 +143,7 @@ private:
     std::condition_variable condition;
     bool stop;
     
-    // Non-copyable
+    // コピー禁止
     LR2BGAThreadPool(const LR2BGAThreadPool&) = delete;
     LR2BGAThreadPool& operator=(const LR2BGAThreadPool&) = delete;
 };
