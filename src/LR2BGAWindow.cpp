@@ -373,6 +373,122 @@ void LR2BGAWindow::ShowDebugWindow()
 }
 
 //------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
+// Helper Functions for Debug Info
+//------------------------------------------------------------------------------
+
+void LR2BGAWindow::FormatExtWindowInfo(wchar_t* buffer, size_t size)
+{
+    if (m_pSettings->m_extWindowEnabled) {
+        swprintf_s(buffer, size,
+            L"Enabled\r\n"
+            L"  Position: %d, %d\r\n"
+            L"  Size: %dx%d\r\n"
+            L"  Wait: %s\r\n"
+            L"  Algorithm: %s\r\n"
+            L"  Keep Aspect: %s\r\n"
+            L"  Passthrough: %s\r\n"
+            L"  Layer: %s",
+            m_pSettings->m_extWindowX, m_pSettings->m_extWindowY,
+            m_pSettings->m_extWindowWidth, m_pSettings->m_extWindowHeight,
+            m_pSettings->m_extWindowPassthrough ? L"Yes (Source Sync)" : L"No (Fixed Size)",
+            m_pSettings->m_extWindowAlgo == RESIZE_NEAREST ? L"Nearest" : L"Bilinear",
+            m_pSettings->m_extWindowKeepAspect ? L"Yes" : L"No",
+            m_pSettings->m_extWindowPassthrough ? L"Yes" : L"No",
+            m_pSettings->m_extWindowTopmost ? L"Topmost" : L"Bottommost");
+    } else {
+        wcscpy_s(buffer, size, L"Disabled");
+    }
+}
+
+void LR2BGAWindow::FormatFPSLimit(wchar_t* buffer, size_t size)
+{
+    if (m_pSettings->m_maxFPS > 0) {
+        swprintf_s(buffer, size, L"%d fps", m_pSettings->m_maxFPS);
+    } else {
+        wcscpy_s(buffer, size, L"Uncapped");
+    }
+}
+
+void LR2BGAWindow::FormatInputStatus(wchar_t* gamePadStatus, size_t gamePadSize, wchar_t* keyStatus, size_t keySize)
+{
+    // Gamepad Check
+    JOYINFOEX joyInfo;
+    joyInfo.dwSize = sizeof(JOYINFOEX);
+    joyInfo.dwFlags = JOY_RETURNBUTTONS;
+    MMRESULT res = joyGetPosEx(m_pSettings->m_gamepadID, &joyInfo);
+    if (res == MMSYSERR_NOERROR) {
+        if (joyInfo.dwButtons == 0) {
+            wcscpy_s(gamePadStatus, gamePadSize, L"Connected (None)");
+        } else {
+            wchar_t btns[64] = L"";
+            bool first = true;
+            for (int b = 0; b < 32; b++) {
+                if (joyInfo.dwButtons & (1 << b)) {
+                    wchar_t buf[8];
+                    swprintf_s(buf, sizeof(buf)/sizeof(wchar_t), L"%s%d", first ? L"" : L",", b);
+                    wcscat_s(btns, sizeof(btns)/sizeof(wchar_t), buf);
+                    first = false;
+                }
+            }
+            swprintf_s(gamePadStatus, gamePadSize, L"Connected (Btn:%s)", btns);
+        }
+    } else {
+        swprintf_s(gamePadStatus, gamePadSize, L"Not Connected (Err:%d)", res);
+    }
+
+    // Keyboard Check
+    wcscpy_s(keyStatus, keySize, L"None");
+    for (int k = 0x01; k < 0xFF; k++) {
+        if (GetAsyncKeyState(k) & 0x8000) {
+            swprintf_s(keyStatus, keySize, L"0x%X (%d)", k, k);
+            break; // Show first key only
+        }
+    }
+}
+
+void LR2BGAWindow::FormatLetterboxInfo(wchar_t* buffer, size_t size, const LetterboxDebugInfo& lbInfo)
+{
+    const wchar_t* lbModeStr = L"Off";
+    if (!m_pSettings->m_autoRemoveLetterbox) {
+        lbModeStr = L"Disabled";
+    } else {
+        switch (lbInfo.detectedMode) {
+            case 0: lbModeStr = L"Scanning (Original)"; break; // LB_MODE_ORIGINAL
+            case 1: lbModeStr = L"16:9 Detected"; break;      // LB_MODE_16_9
+            case 2: lbModeStr = L"4:3 Detected"; break;       // LB_MODE_4_3
+            default: lbModeStr = L"Unknown"; break;
+        }
+    }
+
+    if (m_pSettings->m_autoRemoveLetterbox) {
+        swprintf_s(buffer, size,
+            L"[Auto Letterbox Removal]\r\n"
+            L"  LB Mode: %s\r\n"
+            L"  Stability: %d / %d\r\n"
+            L"  Center Black: %s (%.1f%%)\r\n"
+            L"  16:9 Check: %s (Top: %.1f%%, Btm: %.1f%%)%s\r\n"
+            L"  4:3 Check: %s (Top: %.1f%%, Btm: %.1f%%)%s\r\n\r\n",
+            lbModeStr,
+            lbInfo.stabilityCounter, lbInfo.stabilityThreshold,
+            lbInfo.isCenterBlack ? L"Yes" : L"No", lbInfo.centerBlackRatio * 100.0f,
+            (lbInfo.ratio169Top < 0) ? L"Skipped" : (lbInfo.is169TopBlack && lbInfo.is169BottomBlack ? L"Yes" : L"No"),
+            (lbInfo.ratio169Top < 0) ? 0.0f : lbInfo.ratio169Top * 100.0f,
+            (lbInfo.ratio169Bottom < 0) ? 0.0f : lbInfo.ratio169Bottom * 100.0f,
+            lbInfo.bRejected169 ? L" [Rejected]" : L"",
+            (lbInfo.ratio43Top < 0) ? L"Skipped" : (lbInfo.is43TopBlack && lbInfo.is43BottomBlack ? L"Yes" : L"No"),
+            (lbInfo.ratio43Top < 0) ? 0.0f : lbInfo.ratio43Top * 100.0f,
+            (lbInfo.ratio43Bottom < 0) ? 0.0f : lbInfo.ratio43Bottom * 100.0f,
+            lbInfo.bRejected43 ? L" [Rejected]" : L""
+        ); 
+    } else {
+        swprintf_s(buffer, size,
+            L"[Auto Letterbox Removal]\r\n"
+            L"  Disabled\r\n\r\n");
+    }
+}
+
+//------------------------------------------------------------------------------
 // UpdateDebugInfo
 // 
 // 役割:
@@ -400,109 +516,17 @@ void LR2BGAWindow::UpdateDebugInfo(
        std::lock_guard<std::mutex> lock(m_mtxDebug);
     
     wchar_t extInfo[512];
-    if (m_pSettings->m_extWindowEnabled) {
-        swprintf_s(extInfo, sizeof(extInfo)/sizeof(wchar_t),
-            L"Enabled\r\n"
-            L"  Position: %d, %d\r\n"
-            L"  Size: %dx%d\r\n"
-            L"  Wait: %s\r\n"
-            L"  Algorithm: %s\r\n"
-            L"  Keep Aspect: %s\r\n"
-            L"  Passthrough: %s\r\n"
-            L"  Layer: %s",
-            m_pSettings->m_extWindowX, m_pSettings->m_extWindowY,
-            m_pSettings->m_extWindowWidth, m_pSettings->m_extWindowHeight,
-            m_pSettings->m_extWindowPassthrough ? L"Yes (Source Sync)" : L"No (Fixed Size)",
-            m_pSettings->m_extWindowAlgo == RESIZE_NEAREST ? L"Nearest" : L"Bilinear",
-            m_pSettings->m_extWindowKeepAspect ? L"Yes" : L"No",
-            m_pSettings->m_extWindowPassthrough ? L"Yes" : L"No",
-            m_pSettings->m_extWindowTopmost ? L"Topmost" : L"Bottommost");
-    } else {
-        wcscpy_s(extInfo, sizeof(extInfo)/sizeof(wchar_t), L"Disabled");
-    }
+    FormatExtWindowInfo(extInfo, sizeof(extInfo)/sizeof(wchar_t));
     
     wchar_t fpsLimitStr[32];
-    if (m_pSettings->m_maxFPS > 0) {
-        swprintf_s(fpsLimitStr, sizeof(fpsLimitStr)/sizeof(wchar_t), L"%d fps", m_pSettings->m_maxFPS);
-    } else {
-        wcscpy_s(fpsLimitStr, sizeof(fpsLimitStr)/sizeof(wchar_t), L"Uncapped");
-    }
+    FormatFPSLimit(fpsLimitStr, sizeof(fpsLimitStr)/sizeof(wchar_t));
 
-    // ゲームパッド入力チェック（デバッグ用）
     wchar_t gamePadStatus[128];
-    JOYINFOEX joyInfo;
-    joyInfo.dwSize = sizeof(JOYINFOEX);
-    joyInfo.dwFlags = JOY_RETURNBUTTONS;
-    MMRESULT res = joyGetPosEx(m_pSettings->m_gamepadID, &joyInfo);
-    if (res == MMSYSERR_NOERROR) {
-        if (joyInfo.dwButtons == 0) {
-            wcscpy_s(gamePadStatus, sizeof(gamePadStatus)/sizeof(wchar_t), L"Connected (None)");
-        } else {
-            wchar_t btns[64] = L"";
-            bool first = true;
-            for (int b = 0; b < 32; b++) {
-                if (joyInfo.dwButtons & (1 << b)) {
-                    wchar_t buf[8];
-                    swprintf_s(buf, sizeof(buf)/sizeof(wchar_t), L"%s%d", first ? L"" : L",", b);
-                    wcscat_s(btns, sizeof(btns)/sizeof(wchar_t), buf);
-                    first = false;
-                }
-            }
-            swprintf_s(gamePadStatus, sizeof(gamePadStatus)/sizeof(wchar_t), L"Connected (Btn:%s)", btns);
-        }
-    } else {
-        swprintf_s(gamePadStatus, sizeof(gamePadStatus)/sizeof(wchar_t), L"Not Connected (Err:%d)", res);
-    }
+    wchar_t keyStatus[64];
+    FormatInputStatus(gamePadStatus, sizeof(gamePadStatus)/sizeof(wchar_t), keyStatus, sizeof(keyStatus)/sizeof(wchar_t));
 
-    // キーボード入力チェック（ライブ監視）
-    wchar_t keyStatus[64] = L"None";
-    for (int k = 0x01; k < 0xFF; k++) {
-        if (GetAsyncKeyState(k) & 0x8000) {
-            swprintf_s(keyStatus, sizeof(keyStatus)/sizeof(wchar_t), L"0x%X (%d)", k, k);
-            break; // Show first key only
-        }
-    }
-
-    // LB Mode String
-    const wchar_t* lbModeStr = L"Off";
-    if (!m_pSettings->m_autoRemoveLetterbox) {
-        lbModeStr = L"Disabled";
-    } else {
-        switch (lbInfo.detectedMode) {
-            case 0: lbModeStr = L"Scanning (Original)"; break; // LB_MODE_ORIGINAL
-            case 1: lbModeStr = L"16:9 Detected"; break;      // LB_MODE_16_9
-            case 2: lbModeStr = L"4:3 Detected"; break;       // LB_MODE_4_3
-            default: lbModeStr = L"Unknown"; break;
-        }
-    }
-
-    // 黒帯検出の詳細情報 (Detailed LB Info)
-    wchar_t lbDetailStr[1024] = L"";
-    if (m_pSettings->m_autoRemoveLetterbox) {
-        swprintf_s(lbDetailStr, sizeof(lbDetailStr)/sizeof(wchar_t),
-            L"[Auto Letterbox Removal]\r\n"
-            L"  LB Mode: %s\r\n"
-            L"  Stability: %d / %d\r\n"
-            L"  Center Black: %s (%.1f%%)\r\n"
-            L"  16:9 Check: %s (Top: %.1f%%, Btm: %.1f%%)%s\r\n"
-            L"  4:3 Check: %s (Top: %.1f%%, Btm: %.1f%%)%s\r\n\r\n",
-            lbModeStr,
-            lbInfo.stabilityCounter, lbInfo.stabilityThreshold,
-            lbInfo.isCenterBlack ? L"Yes" : L"No", lbInfo.centerBlackRatio * 100.0f,
-            (lbInfo.ratio169Top < 0) ? L"Skipped" : (lbInfo.is169TopBlack && lbInfo.is169BottomBlack ? L"Yes" : L"No"),
-            (lbInfo.ratio169Top < 0) ? 0.0f : lbInfo.ratio169Top * 100.0f,
-            (lbInfo.ratio169Bottom < 0) ? 0.0f : lbInfo.ratio169Bottom * 100.0f,
-            lbInfo.bRejected169 ? L" [Rejected]" : L"",
-            (lbInfo.ratio43Top < 0) ? L"Skipped" : (lbInfo.is43TopBlack && lbInfo.is43BottomBlack ? L"Yes" : L"No"),
-            (lbInfo.ratio43Top < 0) ? 0.0f : lbInfo.ratio43Top * 100.0f,
-            (lbInfo.ratio43Bottom < 0) ? 0.0f : lbInfo.ratio43Bottom * 100.0f,
-            lbInfo.bRejected43 ? L" [Rejected]" : L""
-        ); 
-    } else {
-        swprintf_s(lbDetailStr, sizeof(lbDetailStr)/sizeof(wchar_t),
-            L"[Auto Letterbox Removal]\r\n"
-            L"  Disabled\r\n\r\n");
-    }
+    wchar_t lbDetailStr[1024];
+    FormatLetterboxInfo(lbDetailStr, sizeof(lbDetailStr)/sizeof(wchar_t), lbInfo);
 
     // デバッグテキストの構築
     swprintf_s(m_debugText, sizeof(m_debugText)/sizeof(wchar_t),
