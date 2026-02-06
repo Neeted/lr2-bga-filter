@@ -19,7 +19,9 @@
 
 #include "LR2BGALetterboxDetector.h"
 #include "LR2BGASettings.h"
+#include <memory>
 #include "LR2BGATypes.h"
+#include "LR2BGATransformLogic.h"
 #include "LR2BGAWindow.h"
 
 //------------------------------------------------------------------------------
@@ -263,9 +265,6 @@ public:
   STDMETHOD(SetLetterboxStability)(int stability) override;
   STDMETHOD(ResetPerformanceStatistics)() override;
 
-  LetterboxMode SafeAnalyzeFrame(BYTE *pBuffer, long width, long height,
-                                 long stride, int bpp);
-
   //--------------------------------------------------------------------------
   // CTransformFilter Overrides
   //--------------------------------------------------------------------------
@@ -290,22 +289,18 @@ public:
   // フレーム変換処理 (Transform)
   HRESULT Transform(IMediaSample *pIn, IMediaSample *pOut) override;
 
-  // ストリーミング開始
+  // ストリーミング開始/終了
   HRESULT StartStreaming() override;
-
-  // ストリーミング停止
   HRESULT StopStreaming() override;
 
-  // ストリーム終了処理
-  HRESULT EndOfStream() override;
+  // 黒帯検出スレッド制御 (TransformLogicへ委譲)
+  void StartLetterboxThread();
+  void StopLetterboxThread();
 
   // LR2ウィンドウへのフォーカス復帰
   void FocusLR2Window();
 
 private:
-  // ヘルパー: フィルタグラフ情報の取得
-  std::wstring GetFilterGraphInfo();
-
   // プライベートコンストラクタ
   CLR2BGAFilter(LPUNKNOWN pUnk, HRESULT *phr);
 
@@ -315,6 +310,9 @@ public:
   LR2BGASettings *GetSettings() { return m_pSettings; }
 
 private:
+  // 内部ヘルパー
+  std::wstring GetFilterGraphInfo();
+
   // デバッグ情報の更新
   void UpdateDebugInfo();
 
@@ -353,40 +351,16 @@ public:
 
   // 非同期検出スレッド (Async Detection Thread)
   // C++11 std::thread を使用して実行
-  std::thread m_threadLB;
-  std::condition_variable m_cvLB;
-  std::mutex m_mtxLBControl;
-  bool m_bLBExit;
-  bool m_bLBRequest;
 
-  // 検出用フレームバッファ (コピー)
-  std::vector<BYTE> m_lbBuffer;
-  LONG m_lbWidth;
-  LONG m_lbHeight;
-  LONG m_lbStride;
-  int m_lbBpp;
-  bool m_lbRequestPending; // 処理中の場合にフレームを破棄するためのフラグ
-  DWORD m_lastLBRequestTime;
-
-  void LetterboxThread();
-  // SEH (構造化例外処理) 用ヘルパー
-  LetterboxMode SafeAnalyzeFrame(BYTE *pBuffer, size_t bufferSize, long width,
-                                 long height, long stride, int bpp);
-
-  FilterMode m_mode; // 動作モード
+  // 映像変換ロジック
+  std::unique_ptr<LR2BGATransformLogic> m_pTransformLogic;
 
   // 入力フォーマット情報 (キャッシュ)
   int m_inputWidth;
   int m_inputHeight;
   int m_inputBitCount;
 
-  REFERENCE_TIME m_lastOutputTime; // 最終出力フレーム時刻
-  LONGLONG m_droppedFrames;        // FPS制限によりドロップされたフレーム数
-  long m_exceptionCount;           // 黒帯検出例外発生回数
-
-  // ダミーモード状態
-  bool m_dummySent;               // ダミーフレーム送信済みフラグ
-  REFERENCE_TIME m_lastDummyTime; // 最終ダミーフレーム送信時刻
+  // 統計情報
 
   // 統計情報
   LONGLONG m_frameCount;       // 処理済みフレーム数 (出力)
