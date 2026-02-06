@@ -98,6 +98,12 @@ public:
     void PropertyPageThread(); // Member function
     void FocusRestoreThread(); // Member function (assuming it needs access to this)
 
+private:
+    void FormatExtWindowInfo(wchar_t* buffer, size_t size);
+    void FormatFPSLimit(wchar_t* buffer, size_t size);
+    void FormatInputStatus(wchar_t* gamePadStatus, size_t gamePadSize, wchar_t* keyStatus, size_t keySize);
+    void FormatLetterboxInfo(wchar_t* buffer, size_t size, const LetterboxDebugInfo& lbInfo);
+
 public:
     LR2BGASettings* m_pSettings;
 
