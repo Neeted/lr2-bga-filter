@@ -1,0 +1,11 @@
+# Enforce CRLF for all text files
+* text=auto eol=crlf
+
+# Explicitly mark binary files
+*.png binary
+*.jpg binary
+*.lib binary
+*.dll binary
+*.ax binary
+*.exe binary
+*.zip binary

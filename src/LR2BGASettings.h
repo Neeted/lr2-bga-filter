@@ -1,6 +1,5 @@
 ﻿#pragma once
 #include <windows.h>
-#include <windows.h>
 #include <mutex>
 #include "LR2BGATypes.h"
 

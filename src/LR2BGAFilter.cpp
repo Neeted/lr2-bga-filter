@@ -1065,6 +1065,19 @@ HRESULT CLR2BGAFilter::Transform(IMediaSample *pIn, IMediaSample *pOut) {
   return S_OK;
 }
 
+// ------------------------------------------------------------------------------
+// Helper: UpdateDebugInfo - デバッグ情報の更新
+//
+// 役割:
+//   現在のフィルタ状態（接続情報、画像サイズ、フレームレート、統計情報）を
+//   UIウィンドウに反映させます。
+//
+// 処理内容:
+//   1. 設定フラグ (m_debugMode) をチェック。無効なら何もしない。
+//   2. 平均処理時間を計算 (m_totalProcessTime / m_processedFrameCount)。
+//   3. 上流・下流の接続先フィルタ名を取得。
+//   4. UIウィンドウの更新メソッドを呼び出し、全情報を渡す。
+// ------------------------------------------------------------------------------
 void CLR2BGAFilter::UpdateDebugInfo() {
   if (!m_pSettings->m_debugMode)
     return;
@@ -1122,7 +1135,9 @@ void CLR2BGAFilter::UpdateDebugInfo() {
       m_avgProcessTime, m_pTransformLogic->GetDetector().GetDebugInfo());
 }
 
+// ------------------------------------------------------------------------------
 // 上流のフィルタ名を再帰的に取得するヘルパー
+// ------------------------------------------------------------------------------
 void CollectUpstream(IPin *pPin, std::vector<std::wstring> &filters,
                      int depth) {
   if (depth > 20)
@@ -1168,7 +1183,9 @@ void CollectUpstream(IPin *pPin, std::vector<std::wstring> &filters,
   }
 }
 
+// ------------------------------------------------------------------------------
 // 下流のフィルタ名を再帰的に取得するヘルパー
+// ------------------------------------------------------------------------------
 void CollectDownstream(IPin *pPin, std::vector<std::wstring> &filters,
                        int depth) {
   if (depth > 20)
@@ -1239,19 +1256,8 @@ std::wstring CLR2BGAFilter::GetFilterGraphInfo() {
 void CLR2BGAFilter::FocusLR2Window() { m_pWindow->FocusLR2Window(); }
 
 // ------------------------------------------------------------------------------
-// レターボックス検出スレッド (Letterbox Thread)
-//
-// 役割:
-//   メインの変換スレッドとは独立して、画像フレームの解析（黒帯検出）を行います。
-//   画像解析は重い処理になる可能性があるため、分離することで再生のスムーズさを維持します。
-//
-// アーキテクチャ:
-//   - イベント駆動型 (Event-Driven): m_hLBRequestEvent
-//   がシグナルされるまで待機します。
+// Letterbox Control Wrappers (Delegated to TransformLogic)
 // ------------------------------------------------------------------------------
-// LetterboxThread - 非同期解析スレッド
-// ------------------------------------------------------------------------------
-// LetterboxThread は TransformLogic に移動
 void CLR2BGAFilter::StartLetterboxThread() {
     if(m_pTransformLogic) m_pTransformLogic->StartLetterboxThread();
 }
@@ -1259,65 +1265,4 @@ void CLR2BGAFilter::StartLetterboxThread() {
 void CLR2BGAFilter::StopLetterboxThread() {
     if(m_pTransformLogic) m_pTransformLogic->StopLetterboxThread();
 }
-
-// ------------------------------------------------------------------------------
-// Helper: ProcessLetterboxDetection - 黒帯検出ロジックの実装
-//
-// 役割:
-//   入力フレームの一部（または全体）を解析用バッファにコピーし、別スレッドでの解析を依頼します。
-//   また、現在の検出状態（m_currentLBMode）に基づいて、切り出し範囲（Source Rect）を調整します。
-//
-// 処理の詳細:
-//   1. 頻度制御: 負荷軽減のため、約200msごとに1回のみ解析をリクエストします。
-//   2. バッファコピー: ワーカースレッドが安全に参照できるようにデータをコピーします。
-//   3. モード反映: 検出されたレターボックスモード（16:9, 4:3等）に従い、srcRectの上下を削ります。
-//
-// 引数:
-//   pSrcData         : 入力画像のデータポインタ
-//   actualDataLength : 実際のデータ長 (安全性チェック用)
-//   srcWidth/Height  : 入力画像の幅・高さ
-//   srcStride        : ストライド (負の値の可能性あり)
-//   srcBitCount      : ビット深度
-//   srcRect          : 修正される矩形構造体 (参照)
-//   pSrcRect         : 修正された場合にセットされるポインタ (参照)
-// ------------------------------------------------------------------------------
-// ProcessLetterboxDetection is moved to LR2BGATransformLogic
-
-// ------------------------------------------------------------------------------
-// Helper: WaitFPSLimit - FPS制限の実装
-//
-// 役割:
-//   設定された最大FPS (m_maxFPS) を超えないように制御します。
-//   前回出力時刻からの経過時間をチェックし、必要に応じて Sleep で待機します。
-//
-// 戻り値:
-//   S_OK    : 処理続行 (FPS制限内、または制限なし)
-//   S_FALSE : フレームスキップ (FPS制限によりドロップすべき)
-// ------------------------------------------------------------------------------
-// WaitFPSLimit is moved to LR2BGATransformLogic
-
-// ------------------------------------------------------------------------------
-// Helper: FillOutputBuffer - 出力バッファへの描画処理
-//
-// 役割:
-//   現在の動作モード（ダミー、パススルー、リサイズ）に応じて、
-//   入力データを加工して出力バッファへ書き込みます。
-//
-// 処理パターン:
-//   1. ダミーモード: 1x1の黒画像を生成（一度だけ送信し、以降はスキップ）。
-//   2. パススルー: リサイズを行わず、フォーマット変換（RGB32->24）のみ実施。
-//   3. リサイズ: 
-//      - アスペクト比維持設定を考慮して出力サイズを計算。
-//      - 指定されたアルゴリズム（最近傍法/バイリニア法）でリサイズ実行。
-//      - 余白（レターボックス）が生じる場合は黒で塗りつぶし。
-//   4. 明るさ調整: LR2用の明度設定を適用。
-//
-// 引数:
-//   pSrcData / pDstData : 入出力バッファポインタ
-//   srcWidth...dstStride: 入出力の画像パラメータ
-//   pSrcRect            : 切り出し範囲（nullptrの場合は全体）
-//   rtStart / rtEnd     : タイムスタンプ参照（更新用）
-//   pOut                : 出力サンプル（データ長設定用）
-// ------------------------------------------------------------------------------
-// FillOutputBuffer is moved to LR2BGATransformLogic
 

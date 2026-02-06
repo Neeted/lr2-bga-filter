@@ -109,7 +109,7 @@ private:
 
     // レターボックス検出
     LR2BGALetterboxDetector m_lbDetector;
-    std::mutex m_mtxLBMode;
+    mutable std::mutex m_mtxLBMode;  // mutable: const メソッドからのロック取得を許可
     std::mutex m_mtxLBBuffer;
     LetterboxMode m_currentLBMode;
 
