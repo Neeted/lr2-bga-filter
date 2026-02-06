@@ -24,6 +24,9 @@
         - メッセージ末尾に空行を挟んで `Co-authored-by: Antigravity Agent <antigravity-agent@google.com>` を追加してください。
 4.  **マージ準備**:
     - 作業完了後はリモートへプッシュし、Pull Request (PR) の作成準備またはマージ作業を行ってください。
+5.  **コマンド実行確認**:
+    - `git commit` などのユーザー承認が必要なコマンドは、承認後に `git log -1 --oneline` で結果を確認してください。
+    - `command_status` が `RUNNING` のままの場合は、ユーザー承認待ちの可能性があるため、過度なポーリングを避けてください。
 
 ## その他
 - **文字コード**: ソースコードは **UTF-8 with BOM** を統一規格とします。

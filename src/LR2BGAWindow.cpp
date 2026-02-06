@@ -951,9 +951,16 @@ void LR2BGAWindow::ExtWindowThread()
 
     // 2. オーバーレイウィンドウクラスの登録
     //    明るさ調整用（黒色半透明）のウィンドウクラスです。
-    WNDCLASSEXW wcOverlay = wc; // 基本設定をコピー
-    wcOverlay.lpszClassName = OVERLAY_WND_CLASS;
+    //    lpfnWndProc に DefWindowProc を使用することで、WM_PAINT 時に
+    //    hbrBackground (BLACK_BRUSH) による黒塗りのみが行われます。
+    //    ※ ExtWndProc を使用すると動画バッファが描画されるバグがありました。
+    WNDCLASSEXW wcOverlay = {0};
+    wcOverlay.cbSize = sizeof(WNDCLASSEXW);
+    wcOverlay.style = CS_HREDRAW | CS_VREDRAW;
+    wcOverlay.lpfnWndProc = DefWindowProc;
+    wcOverlay.hInstance = g_hInst;
     wcOverlay.hbrBackground = (HBRUSH)GetStockObject(BLACK_BRUSH);
+    wcOverlay.lpszClassName = OVERLAY_WND_CLASS;
     RegisterClassExW(&wcOverlay);
     
     // 3. 外部ウィンドウの作成
