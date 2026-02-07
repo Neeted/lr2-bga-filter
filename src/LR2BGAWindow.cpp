@@ -712,8 +712,9 @@ LRESULT CALLBACK LR2BGAWindow::DebugWndProc(HWND hwnd, UINT msg, WPARAM wParam, 
     case WM_DESTROY:
         if (pThis && pThis->m_pSettings) {
              // 最大化・最小化されていない場合のみ保存
-            WINDOWPLACEMENT wp = { sizeof(WINDOWPLACEMENT) };
-            if (GetWindowPlacement(hwnd, &wp) && wp.showCmd == SW_SHOWNORMAL) {
+            // プロパティページが開いている場合など、GetWindowPlacement が SW_SHOWNORMAL 以外を返す可能性があるため
+            // 直接ウィンドウ状態をチェックする
+            if (!IsIconic(hwnd) && !IsZoomed(hwnd)) {
                 RECT rc;
                 if (GetWindowRect(hwnd, &rc)) {
                     pThis->m_pSettings->Lock();
@@ -887,8 +888,8 @@ void LR2BGAWindow::ShowPropertyPage()
     // 自動オープンの場合、遅延後にLR2へフォーカスを戻すスレッドを起動
     if (m_pSettings->m_autoOpenSettings) {
        // 別スレッドでフォーカス復帰処理を行う（ブロッキング回避）
-    if (m_threadFocus.joinable()) m_threadFocus.join();
-    m_threadFocus = std::thread(&LR2BGAWindow::FocusRestoreThread, this);
+        if (m_threadFocus.joinable()) m_threadFocus.join();
+        m_threadFocus = std::thread(&LR2BGAWindow::FocusRestoreThread, this);
     }
 }
 
@@ -982,7 +983,6 @@ void LR2BGAWindow::RestartInputMonitor()
 {
     StopInputMonitor(); // 既存の監視を停止
     // 外部ウィンドウが実際にアクティブな場合のみ再起動
-    // ウィンドウが閉じている場合、ShowExternalWindow 経由で StartInputMonitor が呼ばれます。
     // ウィンドウが閉じている場合、ShowExternalWindow 経由で StartInputMonitor が呼ばれます。
     if (m_pSettings->m_extWindowEnabled && (m_hExtWnd || m_threadExt.joinable())) {
         StartInputMonitor();
