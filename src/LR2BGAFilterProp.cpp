@@ -84,6 +84,13 @@ HRESULT CLR2BGAFilterPropertyPage::OnConnect(IUnknown* pUnk)
         return hr;
     }
 
+    // Weak Reference Pattern:
+    // プロパティページが開いている間もフィルタの参照カウントを増やさないようにする。
+    // これにより、ホストアプリケーションがフィルタを破棄した際に、
+    // プロパティページが開いていてもフィルタのデストラクタが呼び出されるようになる。
+    // フィルタのデストラクタ内でプロパティページは強制的に閉じられるため、ダングリングポインタの問題は回避される。
+    m_pSettings->Release();
+
     // Main Settings
     m_pSettings->GetOutputSize(&m_width, &m_height);
     m_pSettings->GetResizeAlgorithm(&m_algo);
@@ -149,8 +156,8 @@ HRESULT CLR2BGAFilterPropertyPage::OnConnect(IUnknown* pUnk)
 //------------------------------------------------------------------------------
 HRESULT CLR2BGAFilterPropertyPage::OnDisconnect()
 {
-    // 意図的に Release() を呼ばない
-    // フィルタへの参照はホストアプリケーションによってクリーンアップされる
+    // OnConnect で Release() して Weak Reference としているため、
+    // ここでの Release() は不要（二重解放になるため禁止）。
     m_pSettings = NULL;
     return S_OK;
 }
