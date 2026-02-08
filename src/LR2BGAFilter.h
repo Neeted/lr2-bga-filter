@@ -130,6 +130,9 @@ DECLARE_INTERFACE_(ILR2BGAFilterSettings, IUnknown) {
   STDMETHOD(GetCloseOnRightClick)(THIS_ BOOL * pClose) PURE;
   STDMETHOD(SetCloseOnRightClick)(THIS_ BOOL close) PURE;
 
+  STDMETHOD(GetCloseOnResult)(THIS_ BOOL * pClose) PURE; // New
+  STDMETHOD(SetCloseOnResult)(THIS_ BOOL close) PURE;    // New
+
   STDMETHOD(GetGamepadCloseEnabled)(THIS_ BOOL * pEnabled) PURE;
   STDMETHOD(SetGamepadCloseEnabled)(THIS_ BOOL enabled) PURE;
 
@@ -246,6 +249,9 @@ public:
 
   STDMETHOD(GetCloseOnRightClick)(BOOL *pClose) override;
   STDMETHOD(SetCloseOnRightClick)(BOOL close) override;
+
+  STDMETHOD(GetCloseOnResult)(BOOL *pClose) override; // New
+  STDMETHOD(SetCloseOnResult)(BOOL close) override;   // New
 
   STDMETHOD(GetGamepadCloseEnabled)(BOOL *pEnabled) override;
   STDMETHOD(SetGamepadCloseEnabled)(BOOL enabled) override;

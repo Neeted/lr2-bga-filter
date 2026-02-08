@@ -73,6 +73,9 @@ public:
         long long frameCount, long long droppedFrames,
         double avgTime,
         const LetterboxDebugInfo& lbInfo);
+    
+    // シーン変更通知 (LR2MemoryMonitorからのコールバック用)
+    void OnSceneChanged(int sceneId);
 
     // LR2連携: LR2本体ウィンドウへのフォーカス復帰
     void FocusLR2Window();

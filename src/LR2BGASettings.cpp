@@ -15,7 +15,7 @@ LR2BGASettings::LR2BGASettings()
     , m_maxFPS(60)
     , m_limitFPSEnabled(false)
     , m_debugMode(false)
-    , m_extWindowEnabled(false)
+    , m_extWindowEnabled(true)
     , m_extWindowX(0)
     , m_extWindowY(0)
     , m_extWindowWidth(DEFAULT_EXT_WIDTH)
@@ -28,18 +28,19 @@ LR2BGASettings::LR2BGASettings()
     , m_brightnessLR2(100)
     , m_brightnessExt(100)
     , m_autoOpenSettings(false)
-    // 黒帯自動除去 (デフォルト無効)
-    , m_autoRemoveLetterbox(false)
-    , m_lbThreshold(16)
-    , m_lbStability(5)
+    // 黒帯自動除去 (デフォルト有効)
+    , m_autoRemoveLetterbox(true)
+    , m_lbThreshold(22)
+    , m_lbStability(3)
     
     // 手動クローズトリガー設定
     , m_closeOnRightClick(true)
+    , m_closeOnResult(false) // デフォルト無効
     , m_gamepadCloseEnabled(false)
     , m_gamepadID(0)
     , m_gamepadButtonID(0)
     , m_keyboardCloseEnabled(false)
-    , m_keyboardKeyCode(VK_ESCAPE)
+    , m_keyboardKeyCode(VK_RETURN)
     
     // デバッグウィンドウ初期値 (CW_USEDEFAULT)
     , m_debugWindowX(CW_USEDEFAULT)
@@ -68,27 +69,8 @@ void LR2BGASettings::Load()
         if (RegQueryValueExW(hKey, L"ResizeAlgo", NULL, NULL, (LPBYTE)&data, &size) == ERROR_SUCCESS) m_resizeAlgo = (ResizeAlgorithm)data;
         if (RegQueryValueExW(hKey, L"KeepAspectRatio", NULL, NULL, (LPBYTE)&data, &size) == ERROR_SUCCESS) m_keepAspectRatio = (data != 0);
         if (RegQueryValueExW(hKey, L"DebugMode", NULL, NULL, (LPBYTE)&data, &size) == ERROR_SUCCESS) m_debugMode = (data != 0);
-        // MaxFPS と制限有効フラグの移行ロジック (後方互換性維持のため)
-        DWORD maxFPS = 0;
-        bool hasMaxFPS = (RegQueryValueExW(hKey, L"MaxFPS", NULL, NULL, (LPBYTE)&maxFPS, &size) == ERROR_SUCCESS);
-        
-        DWORD limitEnabled = 0;
-        bool hasLimit = (RegQueryValueExW(hKey, L"LimitFPSEnabled", NULL, NULL, (LPBYTE)&limitEnabled, &size) == ERROR_SUCCESS);
-
-        if (hasLimit) {
-            // 新形式: LimitFPSEnabled が存在する場合 (v2.0以降)
-            if (hasMaxFPS) m_maxFPS = maxFPS;
-            m_limitFPSEnabled = (limitEnabled != 0);
-        } else {
-            // 旧形式からの移行: MaxFPS=0 を「無効」として扱っていたバージョンのデータへの対応
-            if (hasMaxFPS && maxFPS > 0) {
-                m_maxFPS = maxFPS;
-                m_limitFPSEnabled = true; // 値があれば有効とみなす
-            } else {
-                m_maxFPS = 60; // 0 (無効) が保存されていた場合は、デフォルト値60fpsで無効状態とする
-                m_limitFPSEnabled = false;
-            }
-        }
+        if (RegQueryValueExW(hKey, L"MaxFPS", NULL, NULL, (LPBYTE)&data, &size) == ERROR_SUCCESS) m_maxFPS = data;
+        if (RegQueryValueExW(hKey, L"LimitFPSEnabled", NULL, NULL, (LPBYTE)&data, &size) == ERROR_SUCCESS) m_limitFPSEnabled = (data != 0);
         if (RegQueryValueExW(hKey, L"DummyMode", NULL, NULL, (LPBYTE)&data, &size) == ERROR_SUCCESS) m_dummyMode = (data != 0);
         if (RegQueryValueExW(hKey, L"PassthroughMode", NULL, NULL, (LPBYTE)&data, &size) == ERROR_SUCCESS) m_passthroughMode = (data != 0);
         
@@ -115,8 +97,11 @@ void LR2BGASettings::Load()
         if (RegQueryValueExW(hKey, L"LetterboxThreshold", NULL, NULL, (LPBYTE)&data, &size) == ERROR_SUCCESS) m_lbThreshold = (int)data;
         if (RegQueryValueExW(hKey, L"LetterboxStability", NULL, NULL, (LPBYTE)&data, &size) == ERROR_SUCCESS) m_lbStability = (int)data;
 
+        if (RegQueryValueExW(hKey, L"LetterboxStability", NULL, NULL, (LPBYTE)&data, &size) == ERROR_SUCCESS) m_lbStability = (int)data;
+        
         // 手動クローズトリガー
         if (RegQueryValueExW(hKey, L"CloseOnRightClick", NULL, NULL, (LPBYTE)&data, &size) == ERROR_SUCCESS) m_closeOnRightClick = (data != 0);
+        if (RegQueryValueExW(hKey, L"CloseOnResult", NULL, NULL, (LPBYTE)&data, &size) == ERROR_SUCCESS) m_closeOnResult = (data != 0);
         if (RegQueryValueExW(hKey, L"GamepadCloseEnabled", NULL, NULL, (LPBYTE)&data, &size) == ERROR_SUCCESS) m_gamepadCloseEnabled = (data != 0);
         if (RegQueryValueExW(hKey, L"GamepadID", NULL, NULL, (LPBYTE)&data, &size) == ERROR_SUCCESS) m_gamepadID = (int)data;
         if (RegQueryValueExW(hKey, L"GamepadButtonID", NULL, NULL, (LPBYTE)&data, &size) == ERROR_SUCCESS) m_gamepadButtonID = (int)data;
@@ -186,6 +171,7 @@ void LR2BGASettings::Save()
 
         // 手動クローズトリガー
         data = m_closeOnRightClick ? 1 : 0; RegSetValueExW(hKey, L"CloseOnRightClick", 0, REG_DWORD, (LPBYTE)&data, sizeof(DWORD));
+        data = m_closeOnResult ? 1 : 0; RegSetValueExW(hKey, L"CloseOnResult", 0, REG_DWORD, (LPBYTE)&data, sizeof(DWORD));
         data = m_gamepadCloseEnabled ? 1 : 0; RegSetValueExW(hKey, L"GamepadCloseEnabled", 0, REG_DWORD, (LPBYTE)&data, sizeof(DWORD));
         data = (DWORD)m_gamepadID; RegSetValueExW(hKey, L"GamepadID", 0, REG_DWORD, (LPBYTE)&data, sizeof(DWORD));
         data = (DWORD)m_gamepadButtonID; RegSetValueExW(hKey, L"GamepadButtonID", 0, REG_DWORD, (LPBYTE)&data, sizeof(DWORD));

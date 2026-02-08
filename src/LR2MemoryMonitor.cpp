@@ -34,7 +34,7 @@ void LR2MemoryMonitor::Stop()
     }
 }
 
-void LR2MemoryMonitor::SetResultCallback(std::function<void()> callback)
+void LR2MemoryMonitor::SetResultCallback(std::function<void(int)> callback)
 {
     m_callback = callback;
 }
@@ -269,17 +269,21 @@ void LR2MemoryMonitor::MonitorThread()
             if (gameObjBase >= kMinBaseAddr && gameObjBase <= kMaxBaseAddr) {
                  // シーンIDのオフセット: base + 0x23DB4
                  uintptr_t targetAddr = gameObjBase + 0x23DB4; 
-                 readSuccess = SafeRead((void*)targetAddr, &currentScene, sizeof(int));
+                 if (SafeRead((void*)targetAddr, &currentScene, sizeof(int))) {
+                     readSuccess = true;
+                 }
             }
         }
 
         if (readSuccess) {
-            // リザルト画面への遷移検知 (シーンID: 5)
-            // 条件: 前回が5でなく、今回が5になった瞬間
-            if (currentScene == kResultSceneId && lastScene != kResultSceneId && lastScene != -1) {
-                OutputDebugStringW(L"[LR2MemoryMonitor] Result screen detected. Closing window.\n");
+            // シーン変更検知
+            if (currentScene != lastScene && lastScene != -1) {
+                wchar_t debugBuf[128];
+                swprintf_s(debugBuf, L"[LR2MemoryMonitor] Scene Changed: %d -> %d\n", lastScene, currentScene);
+                OutputDebugStringW(debugBuf);
+                
                 if (m_callback) {
-                    m_callback();
+                    m_callback(currentScene);
                 }
             }
             lastScene = currentScene;

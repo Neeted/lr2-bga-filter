@@ -66,6 +66,7 @@
 
 // Controls - Manual Close
 #define IDC_CHECK_CLOSE_RCLICK      1100
+#define IDC_CHECK_CLOSE_RESULT      1108
 #define IDC_CHECK_CLOSE_GAMEPAD     1101
 #define IDC_EDIT_GAMEPAD_ID         1102
 #define IDC_SPIN_GAMEPAD_ID         1103

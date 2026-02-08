@@ -17,20 +17,18 @@ public:
     // 監視スレッドを停止する
     void Stop();
 
-    // リザルト画面への遷移を検知した際のコールバックを設定する
-    void SetResultCallback(std::function<void()> callback);
+    // シーン変更を検知した際のコールバックを設定する
+    // callback(sceneId)
+    void SetResultCallback(std::function<void(int)> callback);
 
 private:
-    // 監視ループを実行するメソッド
     void MonitorThread();
-
-    // 現在のプロセスがターゲット（LR2body）かどうかを確認する
     bool IsTargetProcess();
 
 private:
     std::thread m_thread;
     std::atomic<bool> m_bStop;
-    std::function<void()> m_callback;
+    std::function<void(int)> m_callback;
 
     // シーンIDが格納されているオフセット (Base + 0x24 もしくは Base + 0x23DB4)
     // 実際には動的に取得したベースアドレスに対して加算する

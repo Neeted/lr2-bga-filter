@@ -7,7 +7,6 @@
 #define NO_DSHOW_STRSAFE
 
 #include "LR2BGAFilter.h"
-#include "LR2BGAImageProc.h"
 #include "LR2MemoryMonitor.h"
 #include <dvdmedia.h>
 #include <tlhelp32.h>
@@ -150,10 +149,10 @@ CLR2BGAFilter::CLR2BGAFilter(LPUNKNOWN pUnk, HRESULT *phr)
   m_pTransformLogic.reset(new LR2BGATransformLogic(m_pSettings, m_pWindow));
 
   // Memory Monitor Callback
-  m_pMemoryMonitor->SetResultCallback([this]() {
+  m_pMemoryMonitor->SetResultCallback([this](int sceneId) {
       if (m_pWindow) {
-          // Close external window on result screen
-          m_pWindow->CloseExternalWindow();
+          // Notify window of scene change (for close on result, etc.)
+          m_pWindow->OnSceneChanged(sceneId);
       }
   });
 
@@ -516,6 +515,22 @@ STDMETHODIMP CLR2BGAFilter::SetCloseOnRightClick(BOOL close) {
   return S_OK;
 }
 
+STDMETHODIMP CLR2BGAFilter::GetCloseOnResult(BOOL *pClose) {
+  CheckPointer(pClose, E_POINTER);
+  m_pSettings->Lock();
+  *pClose = m_pSettings->m_closeOnResult ? TRUE : FALSE;
+  m_pSettings->Unlock();
+  return S_OK;
+}
+
+STDMETHODIMP CLR2BGAFilter::SetCloseOnResult(BOOL close) {
+  m_pSettings->Lock();
+  m_pSettings->m_closeOnResult = (close != FALSE);
+  m_pSettings->Unlock();
+  m_pSettings->Save();
+  return S_OK;
+}
+
 STDMETHODIMP CLR2BGAFilter::GetGamepadCloseEnabled(BOOL *pEnabled) {
   CheckPointer(pEnabled, E_POINTER);
   m_pSettings->Lock();
@@ -752,7 +767,9 @@ HRESULT CLR2BGAFilter::StartStreaming() {
   m_pTransformLogic->StartLetterboxThread();
 
   // Memory Monitor Start
-  if (m_pMemoryMonitor) {
+  // Memory Monitor Start
+  // 設定が有効な場合のみスレッドを開始する
+  if (m_pMemoryMonitor && m_pSettings->m_closeOnResult) {
       m_pMemoryMonitor->Start();
   }
 

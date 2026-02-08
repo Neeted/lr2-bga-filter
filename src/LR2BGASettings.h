@@ -63,6 +63,7 @@ public:
         
         // クローズトリガー設定
         bool closeOnRightClick;
+        bool closeOnResult; // 追加: リザルト画面で閉じる
         bool gamepadClose;
         int gamepadID;
         int gamepadBtn;
@@ -85,6 +86,7 @@ public:
         cfg.autoRemoveLetterbox = m_autoRemoveLetterbox;
         
         cfg.closeOnRightClick = m_closeOnRightClick;
+        cfg.closeOnResult = m_closeOnResult;
         cfg.gamepadClose = m_gamepadCloseEnabled;
         cfg.gamepadID = m_gamepadID;
         cfg.gamepadBtn = m_gamepadButtonID;
@@ -107,11 +109,15 @@ public:
 
     // 手動クローズトリガー設定 (Manual Close Trigger Settings)
     bool m_closeOnRightClick;       // 右クリックで閉じる
+    bool m_closeOnResult;           // 追加: リザルト画面で閉じる
     bool m_gamepadCloseEnabled;     // ゲームパッドボタンで閉じる
     int m_gamepadID;                // 監視するジョイスティックID
     int m_gamepadButtonID;          // ボタンID
     bool m_keyboardCloseEnabled;    // キーボードキーで閉じる
     int m_keyboardKeyCode;          // 仮想キーコード
+
+    void SetCloseOnResult(bool b) { Lock(); m_closeOnResult = b; Unlock(); }
+    void GetCloseOnResult(bool* b) { Lock(); if(b) *b = m_closeOnResult; Unlock(); }
 
     // Lock
     void Lock() { m_mtx.lock(); }
