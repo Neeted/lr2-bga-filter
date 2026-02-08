@@ -23,6 +23,7 @@
 #include "LR2BGATypes.h"
 #include "LR2BGATransformLogic.h"
 #include "LR2BGAWindow.h"
+#include "LR2MemoryMonitor.h"
 
 //------------------------------------------------------------------------------
 // Filter GUID
@@ -395,5 +396,8 @@ public:
   // リサイズ用LUTバッファ (メモリ再確保抑制)
   std::vector<int> m_lutXIndices;
   std::vector<short> m_lutXWeights;
+
+  // メモリ監視クラス（シーン検知用）
+  std::unique_ptr<LR2MemoryMonitor> m_pMemoryMonitor;
 };
 
