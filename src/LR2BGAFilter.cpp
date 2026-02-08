@@ -8,6 +8,7 @@
 
 #include "LR2BGAFilter.h"
 #include "LR2BGAImageProc.h"
+#include "LR2MemoryMonitor.h"
 #include <dvdmedia.h>
 #include <tlhelp32.h>
 
@@ -133,7 +134,8 @@ CLR2BGAFilter::CLR2BGAFilter(LPUNKNOWN pUnk, HRESULT *phr)
       // 統計情報初期化
       m_frameCount(0), m_processedFrameCount(0), m_inputFrameCount(0),
       m_totalProcessTime(0), m_avgProcessTime(0.0),
-      m_frameRate(0.0), m_outputFrameRate(0.0)
+      m_frameRate(0.0), m_outputFrameRate(0.0),
+      m_pMemoryMonitor(std::make_unique<LR2MemoryMonitor>())
 {
   // 設定マネージャ初期化
   m_pSettings = new LR2BGASettings();
@@ -146,6 +148,14 @@ CLR2BGAFilter::CLR2BGAFilter(LPUNKNOWN pUnk, HRESULT *phr)
 
   // TransformLogicの再初期化（設定とウィンドウを渡す）
   m_pTransformLogic.reset(new LR2BGATransformLogic(m_pSettings, m_pWindow));
+
+  // Memory Monitor Callback
+  m_pMemoryMonitor->SetResultCallback([this]() {
+      if (m_pWindow) {
+          // Close external window on result screen
+          m_pWindow->CloseExternalWindow();
+      }
+  });
 
   if (phr) {
     *phr = S_OK;
@@ -741,6 +751,11 @@ HRESULT CLR2BGAFilter::StartStreaming() {
   // レターボックス検出スレッドを開始 (Logic側)
   m_pTransformLogic->StartLetterboxThread();
 
+  // Memory Monitor Start
+  if (m_pMemoryMonitor) {
+      m_pMemoryMonitor->Start();
+  }
+
   return CTransformFilter::StartStreaming();
 }
 
@@ -749,6 +764,11 @@ HRESULT CLR2BGAFilter::StartStreaming() {
 //------------------------------------------------------------------------------
 HRESULT CLR2BGAFilter::StopStreaming() {
   CAutoLock lock(&m_csReceive);
+
+  // Memory Monitor Stop
+  if (m_pMemoryMonitor) {
+      m_pMemoryMonitor->Stop();
+  }
 
   // レターボックス検出スレッドを停止
   m_pTransformLogic->StopLetterboxThread();

@@ -163,7 +163,40 @@ void LR2MemoryMonitor::MonitorThread()
                 
                 std::vector<unsigned char> code;
                 
-                // 1. MOV [dataAddr], EAX
+                // 1. CMP EAX, 100000 (0x186A0) 
+                //    最小値チェック
+                code.push_back(0x3D);
+                code.push_back(0xA0);
+                code.push_back(0x86);
+                code.push_back(0x01);
+                code.push_back(0x00);
+                
+                // 2. JL +14 bytes (Skip to original code)
+                //    範囲外なら保存せずスキップ
+                //    7C 0E (ジャンプ先: CMP(5) + JG(2) + MOV(5) + 2(Reserve) = 14 bytes先)
+                //    ※命令長再計算: 
+                //      CMP EAX, 2M (5 bytes)
+                //      JG +5       (2 bytes)
+                //      MOV [addr], EAX (5 bytes)
+                //      Total 12 bytes to skip. -> 7C 0C
+                code.push_back(0x7C);
+                code.push_back(0x0C);
+                
+                // 3. CMP EAX, 2000000 (0x1E8480)
+                //    最大値チェック
+                code.push_back(0x3D);
+                code.push_back(0x80);
+                code.push_back(0x84);
+                code.push_back(0x1E);
+                code.push_back(0x00);
+                
+                // 4. JG +5 bytes (Skip to original code)
+                //    範囲外なら保存せずスキップ
+                //    7F 05 (ジャンプ先: MOV(5) = 5 bytes先)
+                code.push_back(0x7F);
+                code.push_back(0x05);
+
+                // 5. MOV [dataAddr], EAX
                 //    現在のEAX(ベースアドレス)を確保した領域に保存する
                 code.push_back(0xA3);
                 uintptr_t* pDataAddr = (uintptr_t*)&dataAddr;
@@ -172,15 +205,16 @@ void LR2MemoryMonitor::MonitorThread()
                 code.push_back(((unsigned char*)pDataAddr)[2]);
                 code.push_back(((unsigned char*)pDataAddr)[3]);
                 
-                // 2. MOV EBX, 1
+                // 6. MOV EBX, 1
                 //    本来あった命令を実行 (上書きしてしまった分)
+                //    ここが "original_code" ラベル相当
                 code.push_back(0xBB);
                 code.push_back(0x01);
                 code.push_back(0x00);
                 code.push_back(0x00);
                 code.push_back(0x00);
                 
-                // 3. JMP returnsAddr
+                // 7. JMP returnsAddr
                 //    元のコードフローに戻る (Base + 0xE79B)
                 code.push_back(0xE9);
                 uintptr_t returnAddr = baseAddr + 0xE79B;
@@ -251,7 +285,7 @@ void LR2MemoryMonitor::MonitorThread()
             lastScene = currentScene;
         }
 
-        std::this_thread::sleep_for(std::chrono::milliseconds(16)); // ~60fps間隔で監視
+        std::this_thread::sleep_for(std::chrono::milliseconds(33)); // ~30fps間隔で監視
     }
 
     OutputDebugStringW(L"[LR2MemoryMonitor] Monitor stopped.\n");
