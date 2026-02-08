@@ -23,6 +23,7 @@
 #include "LR2BGATypes.h"
 #include "LR2BGATransformLogic.h"
 #include "LR2BGAWindow.h"
+#include "LR2MemoryMonitor.h"
 
 //------------------------------------------------------------------------------
 // Filter GUID
@@ -128,6 +129,9 @@ DECLARE_INTERFACE_(ILR2BGAFilterSettings, IUnknown) {
   // 手動クローズ設定 (Manual Close Settings)
   STDMETHOD(GetCloseOnRightClick)(THIS_ BOOL * pClose) PURE;
   STDMETHOD(SetCloseOnRightClick)(THIS_ BOOL close) PURE;
+
+  STDMETHOD(GetCloseOnResult)(THIS_ BOOL * pClose) PURE; // New
+  STDMETHOD(SetCloseOnResult)(THIS_ BOOL close) PURE;    // New
 
   STDMETHOD(GetGamepadCloseEnabled)(THIS_ BOOL * pEnabled) PURE;
   STDMETHOD(SetGamepadCloseEnabled)(THIS_ BOOL enabled) PURE;
@@ -245,6 +249,9 @@ public:
 
   STDMETHOD(GetCloseOnRightClick)(BOOL *pClose) override;
   STDMETHOD(SetCloseOnRightClick)(BOOL close) override;
+
+  STDMETHOD(GetCloseOnResult)(BOOL *pClose) override; // New
+  STDMETHOD(SetCloseOnResult)(BOOL close) override;   // New
 
   STDMETHOD(GetGamepadCloseEnabled)(BOOL *pEnabled) override;
   STDMETHOD(SetGamepadCloseEnabled)(BOOL enabled) override;
@@ -395,5 +402,8 @@ public:
   // リサイズ用LUTバッファ (メモリ再確保抑制)
   std::vector<int> m_lutXIndices;
   std::vector<short> m_lutXWeights;
+
+  // メモリ監視クラス（シーン検知用）
+  std::unique_ptr<LR2MemoryMonitor> m_pMemoryMonitor;
 };
 

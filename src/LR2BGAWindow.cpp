@@ -561,7 +561,7 @@ void LR2BGAWindow::FormatLetterboxInfo(wchar_t* buffer, size_t size, const Lette
             L"  16:9 Check: %s (Top: %.1f%%, Btm: %.1f%%)%s\r\n"
             L"  4:3 Check: %s (Top: %.1f%%, Btm: %.1f%%)%s\r\n\r\n",
             lbModeStr,
-            lbInfo.stabilityCounter, lbInfo.stabilityThreshold,
+            lbInfo.stabilityCounter, m_pSettings->m_lbStability, // Fixed denominator
             lbInfo.isCenterBlack ? L"Yes" : L"No", lbInfo.centerBlackRatio * 100.0f,
             (lbInfo.ratio169Top < 0) ? L"Skipped" : (lbInfo.is169TopBlack && lbInfo.is169BottomBlack ? L"Yes" : L"No"),
             (lbInfo.ratio169Top < 0) ? 0.0f : lbInfo.ratio169Top * 100.0f,
@@ -1118,9 +1118,23 @@ void LR2BGAWindow::InputMonitorThread()
     }
 }
 
+//------------------------------------------------------------------------------
+// OnSceneChanged
+// LR2MemoryMonitorからのシーン変更通知
+//------------------------------------------------------------------------------
+void LR2BGAWindow::OnSceneChanged(int sceneId)
+{
+    // シーンID 5 = Result Screen
+    if (sceneId == 5) {
+        if (m_pSettings && m_pSettings->m_closeOnResult) {
+            CloseExternalWindow();
+        }
+    }
+}
+
 void LR2BGAWindow::OnManualClose()
 {
-    // 永続的な設定を変更せずに非同期でウィンドウを閉じる
+    // ... existing implementation
     if (m_hExtWnd && IsWindow(m_hExtWnd)) {
         PostMessage(m_hExtWnd, WM_CLOSE, 0, 0);
     }

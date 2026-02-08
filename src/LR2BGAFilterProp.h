@@ -113,6 +113,7 @@ private:
 
   // Manual Close
   BOOL m_closeOnRightClick;
+  BOOL m_closeOnResult; // New
   BOOL m_gamepadCloseEnabled;
   int m_gamepadID;
   int m_gamepadButtonID;

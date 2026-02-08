@@ -7,7 +7,7 @@
 #define NO_DSHOW_STRSAFE
 
 #include "LR2BGAFilter.h"
-#include "LR2BGAImageProc.h"
+#include "LR2MemoryMonitor.h"
 #include <dvdmedia.h>
 #include <tlhelp32.h>
 
@@ -133,7 +133,8 @@ CLR2BGAFilter::CLR2BGAFilter(LPUNKNOWN pUnk, HRESULT *phr)
       // 統計情報初期化
       m_frameCount(0), m_processedFrameCount(0), m_inputFrameCount(0),
       m_totalProcessTime(0), m_avgProcessTime(0.0),
-      m_frameRate(0.0), m_outputFrameRate(0.0)
+      m_frameRate(0.0), m_outputFrameRate(0.0),
+      m_pMemoryMonitor(std::make_unique<LR2MemoryMonitor>())
 {
   // 設定マネージャ初期化
   m_pSettings = new LR2BGASettings();
@@ -146,6 +147,14 @@ CLR2BGAFilter::CLR2BGAFilter(LPUNKNOWN pUnk, HRESULT *phr)
 
   // TransformLogicの再初期化（設定とウィンドウを渡す）
   m_pTransformLogic.reset(new LR2BGATransformLogic(m_pSettings, m_pWindow));
+
+  // Memory Monitor Callback
+  m_pMemoryMonitor->SetResultCallback([this](int sceneId) {
+      if (m_pWindow) {
+          // Notify window of scene change (for close on result, etc.)
+          m_pWindow->OnSceneChanged(sceneId);
+      }
+  });
 
   if (phr) {
     *phr = S_OK;
@@ -506,6 +515,22 @@ STDMETHODIMP CLR2BGAFilter::SetCloseOnRightClick(BOOL close) {
   return S_OK;
 }
 
+STDMETHODIMP CLR2BGAFilter::GetCloseOnResult(BOOL *pClose) {
+  CheckPointer(pClose, E_POINTER);
+  m_pSettings->Lock();
+  *pClose = m_pSettings->m_closeOnResult ? TRUE : FALSE;
+  m_pSettings->Unlock();
+  return S_OK;
+}
+
+STDMETHODIMP CLR2BGAFilter::SetCloseOnResult(BOOL close) {
+  m_pSettings->Lock();
+  m_pSettings->m_closeOnResult = (close != FALSE);
+  m_pSettings->Unlock();
+  m_pSettings->Save();
+  return S_OK;
+}
+
 STDMETHODIMP CLR2BGAFilter::GetGamepadCloseEnabled(BOOL *pEnabled) {
   CheckPointer(pEnabled, E_POINTER);
   m_pSettings->Lock();
@@ -741,6 +766,13 @@ HRESULT CLR2BGAFilter::StartStreaming() {
   // レターボックス検出スレッドを開始 (Logic側)
   m_pTransformLogic->StartLetterboxThread();
 
+  // Memory Monitor Start
+  // Memory Monitor Start
+  // 設定が有効な場合のみスレッドを開始する
+  if (m_pMemoryMonitor && m_pSettings->m_closeOnResult) {
+      m_pMemoryMonitor->Start();
+  }
+
   return CTransformFilter::StartStreaming();
 }
 
@@ -749,6 +781,11 @@ HRESULT CLR2BGAFilter::StartStreaming() {
 //------------------------------------------------------------------------------
 HRESULT CLR2BGAFilter::StopStreaming() {
   CAutoLock lock(&m_csReceive);
+
+  // Memory Monitor Stop
+  if (m_pMemoryMonitor) {
+      m_pMemoryMonitor->Stop();
+  }
 
   // レターボックス検出スレッドを停止
   m_pTransformLogic->StopLetterboxThread();

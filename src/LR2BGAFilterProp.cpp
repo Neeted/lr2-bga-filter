@@ -63,6 +63,7 @@ CLR2BGAFilterPropertyPage::CLR2BGAFilterPropertyPage(LPUNKNOWN pUnk)
     , m_lbThreshold(0)
     , m_lbStability(5)
     , m_closeOnRightClick(FALSE)
+    , m_closeOnResult(FALSE) // デフォルト無効
     , m_gamepadCloseEnabled(FALSE)
     , m_gamepadID(0)
     , m_gamepadButtonID(0)
@@ -118,6 +119,7 @@ HRESULT CLR2BGAFilterPropertyPage::OnConnect(IUnknown* pUnk)
 
     // Manual Close
     m_pSettings->GetCloseOnRightClick(&m_closeOnRightClick);
+    m_pSettings->GetCloseOnResult(&m_closeOnResult);
     m_pSettings->GetGamepadCloseEnabled(&m_gamepadCloseEnabled);
     m_pSettings->GetGamepadID(&m_gamepadID);
     m_pSettings->GetGamepadButtonID(&m_gamepadButtonID);
@@ -244,6 +246,7 @@ HRESULT CLR2BGAFilterPropertyPage::OnApplyChanges()
 
     // Manual Close
     m_pSettings->SetCloseOnRightClick(m_closeOnRightClick);
+    m_pSettings->SetCloseOnResult(m_closeOnResult);
     m_pSettings->SetGamepadCloseEnabled(m_gamepadCloseEnabled);
     m_pSettings->SetGamepadID(m_gamepadID);
     m_pSettings->SetGamepadButtonID(m_gamepadButtonID);
@@ -408,6 +411,7 @@ void CLR2BGAFilterPropertyPage::InitBindings()
 
     // 4. 手動クローズ設定 (Manual Close)
     m_bindings.push_back({ IDC_CHECK_CLOSE_RCLICK, BindType::Bool, &m_closeOnRightClick });
+    m_bindings.push_back({ IDC_CHECK_CLOSE_RESULT, BindType::Bool, &m_closeOnResult });
     m_bindings.push_back({ IDC_CHECK_CLOSE_GAMEPAD, BindType::Bool, &m_gamepadCloseEnabled });
     m_bindings.push_back({ IDC_EDIT_GAMEPAD_ID, BindType::Int, &m_gamepadID });
     m_bindings.push_back({ IDC_EDIT_GAMEPAD_BTN, BindType::Int, &m_gamepadButtonID });
@@ -419,7 +423,7 @@ void CLR2BGAFilterPropertyPage::InitBindings()
     m_bindings.push_back({ IDC_EDIT_LB_THRESHOLD, BindType::Int, &m_lbThreshold, 0, 255 });
     m_bindings.push_back({ IDC_EDIT_LB_STABILITY, BindType::Int, &m_lbStability, 1, 900, false, nullptr,
         [this]() {
-            wchar_t buf[32]; swprintf_s(buf, L"(approx. %d ms)", m_lbStability * 200);
+            wchar_t buf[32]; swprintf_s(buf, L"(%d ms)", m_lbStability * 200);
             SetDlgItemTextW(m_Dlg, IDC_LABEL_LB_MS, buf);
         }
     });

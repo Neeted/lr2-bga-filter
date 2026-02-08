@@ -10,7 +10,7 @@
 //------------------------------------------------------------------------------
 // Property Page Dialog
 //------------------------------------------------------------------------------
-IDD_PROPPAGE DIALOGEX 0, 0, 220, 360
+IDD_PROPPAGE DIALOGEX 0, 0, 220, 310
 STYLE DS_SETFONT | WS_CHILD
 FONT 9, "Segoe UI"
 BEGIN
@@ -40,7 +40,7 @@ BEGIN
     LTEXT           "100%", IDC_LABEL_VAL_BRIGHTNESS_LR2, 180, 63, 25, 8
 
     // External Window Section
-    GROUPBOX        "External Window", -1, 7, 92, 206, 100 // Y: 136->92 (-44), H: 175->100
+    GROUPBOX        "External Window (Drag to move)", -1, 7, 92, 206, 93 // Reduced height, new title
     
     AUTOCHECKBOX    "Enable", IDC_CHECK_EXT_ENABLE, 14, 104, 40, 10
     AUTOCHECKBOX    "Passthrough", IDC_CHECK_EXT_PASSTHROUGH, 60, 104, 60, 10
@@ -73,42 +73,42 @@ BEGIN
     CONTROL         "", IDC_SLIDER_BRIGHTNESS_EXT, "msctls_trackbar32", TBS_AUTOTICKS | WS_TABSTOP, 55, 164, 120, 15
     LTEXT           "100%", IDC_LABEL_VAL_BRIGHTNESS_EXT, 180, 166, 25, 8
     
-    LTEXT           "Use mouse drag to move window.", -1, 14, 178, 190, 8
-    
     // Close Triggers
-    GROUPBOX        "Close Triggers", -1, 7, 197, 206, 45 // Y: 315->197 (-118)
+    GROUPBOX        "External Window Close Triggers", -1, 7, 190, 206, 45
     
-    AUTOCHECKBOX    "R-Click", IDC_CHECK_CLOSE_RCLICK, 14, 209, 40, 10
-    AUTOCHECKBOX    "Gamepad:", IDC_CHECK_CLOSE_GAMEPAD, 60, 209, 50, 10
-    LTEXT           "ID:", -1, 115, 210, 10, 8
-    EDITTEXT        IDC_EDIT_GAMEPAD_ID, 126, 208, 22, 12, ES_NUMBER | ES_AUTOHSCROLL
-    CONTROL         "", IDC_SPIN_GAMEPAD_ID, "msctls_updown32", UDS_SETBUDDYINT | UDS_ALIGNRIGHT | UDS_AUTOBUDDY | UDS_ARROWKEYS | UDS_NOTHOUSANDS, 148, 208, 11, 12
-    LTEXT           "Btn:", -1, 162, 210, 15, 8
-    EDITTEXT        IDC_EDIT_GAMEPAD_BTN, 178, 208, 22, 12, ES_NUMBER | ES_AUTOHSCROLL
-    CONTROL         "", IDC_SPIN_GAMEPAD_BTN, "msctls_updown32", UDS_SETBUDDYINT | UDS_ALIGNRIGHT | UDS_AUTOBUDDY | UDS_ARROWKEYS | UDS_NOTHOUSANDS, 200, 208, 11, 12
+    AUTOCHECKBOX    "R-Click", IDC_CHECK_CLOSE_RCLICK, 14, 202, 40, 10
+    AUTOCHECKBOX    "Result Screen", IDC_CHECK_CLOSE_RESULT, 14, 217, 52, 10
 
-    AUTOCHECKBOX    "Keyboard:", IDC_CHECK_CLOSE_KEYBOARD, 60, 224, 50, 10
-    LTEXT           "Key Code:", -1, 115, 226, 35, 8
-    EDITTEXT        IDC_EDIT_KEYBOARD_KEY, 150, 224, 30, 12, ES_AUTOHSCROLL
-    LTEXT           "(Hex)", -1, 185, 226, 20, 8
+    AUTOCHECKBOX    "Gamepad:", IDC_CHECK_CLOSE_GAMEPAD, 70, 202, 50, 10
+    LTEXT           "ID:", -1, 120, 203, 10, 8
+    EDITTEXT        IDC_EDIT_GAMEPAD_ID, 131, 201, 22, 12, ES_NUMBER | ES_AUTOHSCROLL
+    CONTROL         "", IDC_SPIN_GAMEPAD_ID, "msctls_updown32", UDS_SETBUDDYINT | UDS_ALIGNRIGHT | UDS_AUTOBUDDY | UDS_ARROWKEYS | UDS_NOTHOUSANDS, 153, 201, 11, 12
+    LTEXT           "Btn:", -1, 167, 203, 15, 8
+    EDITTEXT        IDC_EDIT_GAMEPAD_BTN, 183, 201, 22, 12, ES_NUMBER | ES_AUTOHSCROLL
+    CONTROL         "", IDC_SPIN_GAMEPAD_BTN, "msctls_updown32", UDS_SETBUDDYINT | UDS_ALIGNRIGHT | UDS_AUTOBUDDY | UDS_ARROWKEYS | UDS_NOTHOUSANDS, 205, 201, 11, 12
+
+    AUTOCHECKBOX    "Keyboard:", IDC_CHECK_CLOSE_KEYBOARD, 70, 217, 50, 10
+    LTEXT           "Key Code:", -1, 120, 219, 35, 8
+    EDITTEXT        IDC_EDIT_KEYBOARD_KEY, 155, 217, 30, 12, ES_AUTOHSCROLL
+    LTEXT           "(Hex)", -1, 188, 219, 20, 8
 
     // Auto Letterbox Removal
-    GROUPBOX        "Auto Letterbox Removal", -1, 7, 248, 206, 50
-    AUTOCHECKBOX    "Enable", IDC_CHECK_AUTO_REMOVE_LB, 14, 260, 40, 10
+    GROUPBOX        "Auto Letterbox Removal", -1, 7, 240, 206, 30
+    AUTOCHECKBOX    "Enable", IDC_CHECK_AUTO_REMOVE_LB, 14, 252, 40, 10
     
-    LTEXT           "Thresh:", -1, 60, 261, 26, 8
-    EDITTEXT        IDC_EDIT_LB_THRESHOLD, 88, 259, 24, 12, ES_NUMBER | ES_AUTOHSCROLL
-    CONTROL         "", IDC_SPIN_LB_THRESHOLD, "msctls_updown32", UDS_SETBUDDYINT | UDS_ALIGNRIGHT | UDS_AUTOBUDDY | UDS_ARROWKEYS | UDS_NOTHOUSANDS, 112, 259, 11, 12
+    LTEXT           "Thresh:", -1, 55, 253, 26, 8
+    EDITTEXT        IDC_EDIT_LB_THRESHOLD, 81, 251, 24, 12, ES_NUMBER | ES_AUTOHSCROLL
+    CONTROL         "", IDC_SPIN_LB_THRESHOLD, "msctls_updown32", UDS_SETBUDDYINT | UDS_ALIGNRIGHT | UDS_AUTOBUDDY | UDS_ARROWKEYS | UDS_NOTHOUSANDS, 105, 251, 11, 12
     
-    LTEXT           "Stable:", -1, 129, 261, 24, 8
-    EDITTEXT        IDC_EDIT_LB_STABILITY, 155, 259, 24, 12, ES_NUMBER | ES_AUTOHSCROLL
-    CONTROL         "", IDC_SPIN_LB_STABILITY, "msctls_updown32", UDS_SETBUDDYINT | UDS_ALIGNRIGHT | UDS_AUTOBUDDY | UDS_ARROWKEYS | UDS_NOTHOUSANDS, 179, 259, 11, 12
+    LTEXT           "Stable:", -1, 120, 253, 24, 8
+    EDITTEXT        IDC_EDIT_LB_STABILITY, 144, 251, 24, 12, ES_NUMBER | ES_AUTOHSCROLL
+    CONTROL         "", IDC_SPIN_LB_STABILITY, "msctls_updown32", UDS_SETBUDDYINT | UDS_ALIGNRIGHT | UDS_AUTOBUDDY | UDS_ARROWKEYS | UDS_NOTHOUSANDS, 168, 251, 11, 12
 
-    LTEXT           "(Frames)", IDC_LABEL_LB_MS, 155, 273, 60, 8
+    LTEXT           "(000 ms)", IDC_LABEL_LB_MS, 180, 253, 30, 8
 
     // Bottom Controls
-    AUTOCHECKBOX    "Debug Mode (Info Window)", IDC_CHECK_DEBUGMODE, 7, 310, 190, 10
-    AUTOCHECKBOX    "Auto Open Properties", IDC_CHECK_AUTO_OPEN, 7, 325, 190, 10
+    AUTOCHECKBOX    "Debug Mode (Info Window)", IDC_CHECK_DEBUGMODE, 7, 277, 190, 10
+    AUTOCHECKBOX    "Auto Open Properties", IDC_CHECK_AUTO_OPEN, 7, 292, 190, 10
 END
 
 //------------------------------------------------------------------------------
@@ -126,7 +126,11 @@ VS_VERSION_INFO VERSIONINFO
     FILEVERSION 1,0,0,0
     PRODUCTVERSION 1,0,0,0
     FILEFLAGSMASK 0x3fL
+#ifdef _DEBUG
+    FILEFLAGS 0x1L
+#else
     FILEFLAGS 0x0L
+#endif
     FILEOS VOS__WINDOWS32
     FILETYPE VFT_DLL
     FILESUBTYPE VFT2_UNKNOWN
@@ -135,11 +139,11 @@ BEGIN
     BEGIN
         BLOCK "040904b0"
         BEGIN
-            VALUE "CompanyName", "LR2 Community"
-            VALUE "FileDescription", "LR2 BGA Filter"
+            VALUE "CompanyName", "Manhattan Gaffe"
+            VALUE "FileDescription", "High-Quality BGA Filter for LR2"
             VALUE "FileVersion", "1.0.0.0"
             VALUE "InternalName", "LR2BGAFilter.ax"
-            VALUE "LegalCopyright", "MIT License"
+            VALUE "LegalCopyright", "Copyright (C) 2026 Manhattan Gaffe"
             VALUE "OriginalFilename", "LR2BGAFilter.ax"
             VALUE "ProductName", "LR2 BGA Filter"
             VALUE "ProductVersion", "1.0.0.0"
