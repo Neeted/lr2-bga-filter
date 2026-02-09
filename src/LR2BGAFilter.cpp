@@ -36,7 +36,7 @@ static const AMOVIESETUP_PIN sudPins[] = {
 
 static const AMOVIESETUP_FILTER sudFilter = {
     &CLSID_LR2BGAFilter, L"LR2 BGA Filter",
-    MERIT_DO_NOT_USE + 1, // Slightly higher merit
+    0xfff00000, // MERIT_PREFERRED + 0x80000 (Highest priority)
     2, sudPins};
 
 //------------------------------------------------------------------------------
@@ -44,12 +44,18 @@ static const AMOVIESETUP_FILTER sudFilter = {
 //------------------------------------------------------------------------------
 // Forward declaration
 #include "LR2BGAFilterProp.h"
+#include "LR2NullAudioRenderer.h"
+
+// 外部参照: sudNullAudioFilter (LR2NullAudioRenderer.cpp で定義)
+extern AMOVIESETUP_FILTER sudNullAudioFilter;
 
 CFactoryTemplate g_Templates[] = {
     {L"LR2 BGA Filter", &CLSID_LR2BGAFilter, CLR2BGAFilter::CreateInstance,
      NULL, &sudFilter},
     {L"LR2 BGA Filter Property Page", &CLSID_LR2BGAFilterPropertyPage,
-     CLR2BGAFilterPropertyPage::CreateInstance, NULL, NULL}};
+     CLR2BGAFilterPropertyPage::CreateInstance, NULL, NULL},
+    {L"LR2 BGA Null Audio Renderer", &CLSID_LR2NullAudioRenderer,
+     CLR2NullAudioRenderer::CreateInstance, NULL, &sudNullAudioFilter}};
 
 int g_cTemplates = sizeof(g_Templates) / sizeof(g_Templates[0]);
 
