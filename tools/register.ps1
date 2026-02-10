@@ -28,7 +28,7 @@ if (-not (Test-Path $FilterPath)) {
         $FilterPath = Join-Path $PSScriptRoot "..\bin\Win32\Release\LR2BGAFilter.ax"
     }
 }
-$FilterGuid = "{7B8C9D0E-1F2A-4B3C-8D4E-5F6A7B8C9D0E}"
+$FilterGuid = "{61E38596-D44C-4097-89AF-AABBA85DAA6D}"
 
 # DirectShow Filter Category GUID
 $LegacyAmFilterCategory = "{083863F1-70DE-11d0-BD40-00A0C911CE86}"

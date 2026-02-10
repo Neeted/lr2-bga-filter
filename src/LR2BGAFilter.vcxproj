@@ -185,6 +185,7 @@
     <ClCompile Include="LR2BGAExternalRenderer.cpp" />
     <ClCompile Include="LR2BGAWindow.cpp" />
     <ClCompile Include="LR2MemoryMonitor.cpp" />
+    <ClCompile Include="LR2NullAudioRenderer.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="LR2BGAFilter.h" />
@@ -198,6 +199,7 @@
     <ClInclude Include="LR2BGAWindow.h" />
     <ClInclude Include="LR2BGAExternalRenderer.h" />
     <ClInclude Include="LR2MemoryMonitor.h" />
+    <ClInclude Include="LR2NullAudioRenderer.h" />
     <ClInclude Include="LR2BGAThreadPool.h" />
     <ClInclude Include="resource.h" />
   </ItemGroup>

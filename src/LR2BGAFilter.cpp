@@ -36,7 +36,7 @@ static const AMOVIESETUP_PIN sudPins[] = {
 
 static const AMOVIESETUP_FILTER sudFilter = {
     &CLSID_LR2BGAFilter, L"LR2 BGA Filter",
-    MERIT_DO_NOT_USE + 1, // Slightly higher merit
+    0xfff00000, // MERIT_PREFERRED + 0x80000 (Highest priority)
     2, sudPins};
 
 //------------------------------------------------------------------------------
@@ -44,12 +44,18 @@ static const AMOVIESETUP_FILTER sudFilter = {
 //------------------------------------------------------------------------------
 // Forward declaration
 #include "LR2BGAFilterProp.h"
+#include "LR2NullAudioRenderer.h"
+
+// 外部参照: sudNullAudioFilter (LR2NullAudioRenderer.cpp で定義)
+extern AMOVIESETUP_FILTER sudNullAudioFilter;
 
 CFactoryTemplate g_Templates[] = {
     {L"LR2 BGA Filter", &CLSID_LR2BGAFilter, CLR2BGAFilter::CreateInstance,
      NULL, &sudFilter},
     {L"LR2 BGA Filter Property Page", &CLSID_LR2BGAFilterPropertyPage,
-     CLR2BGAFilterPropertyPage::CreateInstance, NULL, NULL}};
+     CLR2BGAFilterPropertyPage::CreateInstance, NULL, NULL},
+    {L"LR2 BGA Null Audio Renderer", &CLSID_LR2NullAudioRenderer,
+     CLR2NullAudioRenderer::CreateInstance, NULL, &sudNullAudioFilter}};
 
 int g_cTemplates = sizeof(g_Templates) / sizeof(g_Templates[0]);
 
@@ -760,13 +766,26 @@ HRESULT CLR2BGAFilter::StartStreaming() {
     m_pWindow->ShowExternalWindow();
   }
 
+  // 出力サイズの決定 (SetMediaType と同じロジック)
+  int outWidth, outHeight;
+  if (m_pSettings->m_dummyMode) {
+    outWidth = 1;
+    outHeight = 1;
+  } else if (m_pSettings->m_passthroughMode) {
+    // パススルーモードでは入力サイズをそのまま使用
+    outWidth = m_inputWidth;
+    outHeight = m_inputHeight;
+  } else {
+    outWidth = m_pSettings->m_outputWidth;
+    outHeight = m_pSettings->m_outputHeight;
+  }
+
   // TransformLogic開始
   m_pTransformLogic->StartStreaming(m_inputWidth, m_inputHeight, m_inputBitCount,
-                                    m_pSettings->m_outputWidth, m_pSettings->m_outputHeight);
+                                    outWidth, outHeight);
   // レターボックス検出スレッドを開始 (Logic側)
   m_pTransformLogic->StartLetterboxThread();
 
-  // Memory Monitor Start
   // Memory Monitor Start
   // 設定が有効な場合のみスレッドを開始する
   if (m_pMemoryMonitor && m_pSettings->m_closeOnResult) {

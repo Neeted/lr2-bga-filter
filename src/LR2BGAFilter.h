@@ -27,24 +27,24 @@
 
 //------------------------------------------------------------------------------
 // Filter GUID
-// {7B8C9D0E-1F2A-4B3C-8D4E-5F6A7B8C9D0E}
+// {61E38596-D44C-4097-89AF-AABBA85DAA6D}
 //------------------------------------------------------------------------------
-DEFINE_GUID(CLSID_LR2BGAFilter, 0x7b8c9d0e, 0x1f2a, 0x4b3c, 0x8d, 0x4e, 0x5f,
-            0x6a, 0x7b, 0x8c, 0x9d, 0x0e);
+DEFINE_GUID(CLSID_LR2BGAFilter, 0x61e38596, 0xd44c, 0x4097, 0x89, 0xaf, 0xaa,
+            0xbb, 0xa8, 0x5d, 0xaa, 0x6d);
 
 //------------------------------------------------------------------------------
 // Property Page GUID
-// {7B8C9D0E-1F2A-4B3C-8D4E-5F6A7B8C9D0F}
+// {2563D58E-A087-4D0F-AF7B-4020A8B0E753}
 //------------------------------------------------------------------------------
-DEFINE_GUID(CLSID_LR2BGAFilterPropertyPage, 0x7b8c9d0e, 0x1f2a, 0x4b3c, 0x8d,
-            0x4e, 0x5f, 0x6a, 0x7b, 0x8c, 0x9d, 0x0f);
+DEFINE_GUID(CLSID_LR2BGAFilterPropertyPage, 0x2563d58e, 0xa087, 0x4d0f, 0xaf, 0x7b, 0x40,
+            0x20, 0xa8, 0xb0, 0xe7, 0x53);
 
 //------------------------------------------------------------------------------
 // Settings Interface GUID
-// {7B8C9D0E-1F2A-4B3C-8D4E-5F6A7B8C9D10}
+// {F42A4B4D-C9FD-4DCD-9CD0-AEBE95F81F82}
 //------------------------------------------------------------------------------
-DEFINE_GUID(IID_ILR2BGAFilterSettings, 0x7b8c9d0e, 0x1f2a, 0x4b3c, 0x8d, 0x4e,
-            0x5f, 0x6a, 0x7b, 0x8c, 0x9d, 0x10);
+DEFINE_GUID(IID_ILR2BGAFilterSettings, 0xf42a4b4d, 0xc9fd, 0x4dcd, 0x9c, 0xd0, 0xae,
+            0xbe, 0x95, 0xf8, 0x1f, 0x82);
 
 //------------------------------------------------------------------------------
 // Operation Modes
@@ -406,4 +406,6 @@ public:
   // メモリ監視クラス（シーン検知用）
   std::unique_ptr<LR2MemoryMonitor> m_pMemoryMonitor;
 };
+
+
 
