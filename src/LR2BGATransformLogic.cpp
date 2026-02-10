@@ -49,23 +49,14 @@ void LR2BGATransformLogic::StartStreaming(int inputWidth, int inputHeight, int i
     m_activeHeight = outputHeight;
 
     // モード判定
-    // 入出力サイズが一致し、かつ特定設定ならパススルー
+    // 入出力サイズが一致し、かつアスペクト比維持不要ならパススルー
     bool isSizeSame = (inputWidth == outputWidth) && (inputHeight == outputHeight);
-    // 32bit->24bit変換が必要な場合はパススルーでもコピー処理は必要
+    // 32bit->24bit変換が必要な場合でもパススルー扱い（単純コピーで済む）
     
-    // 現在の実装では、設定の m_enableResize が false ならパススルー扱い
-    // またはリサイズ不要な場合
-    // ※ 簡易的な判定ロジック（必要に応じて調整）
-    if (m_pSettings->m_resizeAlgo == RESIZE_BILINEAR || m_pSettings->m_resizeAlgo == RESIZE_NEAREST) {
-        m_activePassthrough = isSizeSame && !m_pSettings->m_keepAspectRatio; // アスペクト比維持がなければ単純コピーで済むかも？
-        // 実際には LR2BGAFilter.cpp のロジックを見ると、m_mode で制御していた
-        // ここでは単純化して、リサイズが必要かどうかで判断
-    }
-
-    // パススルー条件の再定義（元のロジックに合わせる）
-    // 元コードでは m_mode = MODE_PASSTHROUGH などを判定していた
-    // ここでは、FillOutputBuffer内で動的に判断する要素もあるが、バッファ確保の都合上
-    // ラッチできるものはしておく
+    // パススルー条件:
+    //   1. 入出力サイズが完全一致
+    //   2. アスペクト比維持がOFF（ONだと黒帯除去時に余白計算が発生するため）
+    m_activePassthrough = isSizeSame && !m_pSettings->m_keepAspectRatio;
 
     // ダミーモード
     m_activeDummy = (inputWidth == 0 || inputHeight == 0); // 入力がない場合など
@@ -338,37 +329,42 @@ HRESULT LR2BGATransformLogic::FillOutputBuffer(const BYTE* pSrcData, BYTE* pDstD
                                                int dstWidth, int dstHeight, int dstStride, const RECT* pSrcRect,
                                                REFERENCE_TIME& rtStart, REFERENCE_TIME& rtEnd,
                                                long& outActualDataLength) {
-    // Dummy Mode (入力がない場合など)
-    // この実装は簡易版。本来はFilter側でDummyかどうか判定しているかも。
+    // -------------------------------------------------------------------------
+    // ダミーモード処理
+    // 入力がない場合（1x1黒画像）、一度だけ黒フレームを出力してスキップ
+    // -------------------------------------------------------------------------
     if (m_activeDummy) {
         if (!m_dummySent) {
             ZeroMemory(pDstData, dstStride * dstHeight);
             outActualDataLength = dstStride * dstHeight;
             m_dummySent = true;
             m_lastDummyTime = rtStart;
-            return S_OK; // SyncPoint等はFilter側でセット
+            return S_OK;
         } else {
+            // 2フレーム目以降はスキップ（プレゼンテーション時間だけ待機）
             DWORD waitMs = 0;
             if (rtEnd > rtStart) waitMs = (DWORD)((rtEnd - rtStart) / 10000);
             if (waitMs > 0 && waitMs < kTransformMaxSleepMs) Sleep(waitMs);
-            return S_FALSE; // Skip
+            return S_FALSE;
         }
     }
 
-    // Passthrough Check (簡易)
+    // -------------------------------------------------------------------------
+    // パススルー判定
+    // m_activePassthrough は StartStreaming でラッチ済み
+    // -------------------------------------------------------------------------
     bool isPassthrough = m_activePassthrough;
-    // 設定変更を反映した判定
-    if (!isPassthrough) {
-         // 入出力解像度とアスペクト比設定から、リサイズ不要か判定するロジックを入れることも可能
-         // ここではシンプルに
-    }
 
     if (isPassthrough) {
+        // パススルー時も出力バッファサイズを超えないように制限
+        int copyHeight = (srcHeight < dstHeight) ? srcHeight : dstHeight;
+        int copyWidth = (srcWidth < dstWidth) ? srcWidth : dstWidth;
+        
         if (srcBitCount == 32) {
-             for (int y = 0; y < srcHeight; y++) {
+             for (int y = 0; y < copyHeight; y++) {
                 const BYTE *pSrcRow = pSrcData + y * srcStride;
                 BYTE *pDstRow = pDstData + y * dstStride;
-                for (int x = 0; x < srcWidth; x++) {
+                for (int x = 0; x < copyWidth; x++) {
                     // RGB32 -> RGB24
                     pDstRow[x * 3 + 0] = pSrcRow[x * 4 + 0];
                     pDstRow[x * 3 + 1] = pSrcRow[x * 4 + 1];
@@ -377,8 +373,10 @@ HRESULT LR2BGATransformLogic::FillOutputBuffer(const BYTE* pSrcData, BYTE* pDstD
             }
         } else {
             // RGB24 -> RGB24
-            int copyW = (srcWidth * 3 < dstStride) ? srcWidth * 3 : dstStride; 
-            for (int y = 0; y < srcHeight; y++) {
+            int copyW = copyWidth * 3;
+            if (copyW > dstStride) copyW = dstStride;
+            if (copyW > srcStride) copyW = srcStride;
+            for (int y = 0; y < copyHeight; y++) {
                 CopyMemory(pDstData + y * dstStride, pSrcData + y * srcStride, copyW);
             }
         }

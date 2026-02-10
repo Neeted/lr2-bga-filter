@@ -766,13 +766,26 @@ HRESULT CLR2BGAFilter::StartStreaming() {
     m_pWindow->ShowExternalWindow();
   }
 
+  // 出力サイズの決定 (SetMediaType と同じロジック)
+  int outWidth, outHeight;
+  if (m_pSettings->m_dummyMode) {
+    outWidth = 1;
+    outHeight = 1;
+  } else if (m_pSettings->m_passthroughMode) {
+    // パススルーモードでは入力サイズをそのまま使用
+    outWidth = m_inputWidth;
+    outHeight = m_inputHeight;
+  } else {
+    outWidth = m_pSettings->m_outputWidth;
+    outHeight = m_pSettings->m_outputHeight;
+  }
+
   // TransformLogic開始
   m_pTransformLogic->StartStreaming(m_inputWidth, m_inputHeight, m_inputBitCount,
-                                    m_pSettings->m_outputWidth, m_pSettings->m_outputHeight);
+                                    outWidth, outHeight);
   // レターボックス検出スレッドを開始 (Logic側)
   m_pTransformLogic->StartLetterboxThread();
 
-  // Memory Monitor Start
   // Memory Monitor Start
   // 設定が有効な場合のみスレッドを開始する
   if (m_pMemoryMonitor && m_pSettings->m_closeOnResult) {

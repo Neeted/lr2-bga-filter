@@ -106,19 +106,8 @@ void LR2BGAImageProc::ResizeNearestNeighbor(
 {
     if (!m_initialized) Initialize();
     
-    // Create dummy weights for function pointer compatibility
-    static std::vector<short> dummyWeights; // Thread-safe enough as it's unused dummy and read-only context effectively
-    // But to be 100% safe against concurrent writes if implementation changed to write to it:
-    // The implementations (CppOpt, SSE41) Resize only if size < needed.
-    // If we pass an empty vector, they might resize it.
-    // If multiple threads call ResizeNearestNeighbor concurrently (which shouldn't happen for valid Filter graph usually, but still), 
-    // sharing a static vector that gets resized is bad.
-    // However, ResizeNearestNeighbor implementations (Cpp, CppOpt) do NOT use lutWeights.
-    // So they won't resize it?
-    // ResizeNearestNeighbor_CppOpt signature: std::vector<int>& lutIndices, std::vector<short>& lutWeights
-    // But it only uses lutIndices.
-    // So it won't touch lutWeights.
-    // So a local dummy is fine.
+    // 関数ポインタのシグネチャ互換用ダミー
+    // NearestNeighbor系の実装は lutWeights を使用しないため空で問題ない
     std::vector<short> dummyW;
     pResizeNearest(pSrc, srcWidth, srcHeight, srcStride, srcBpp, 
                    pDst, dstWidth, dstHeight, dstStride, dstBpp, 
@@ -145,12 +134,7 @@ void LR2BGAImageProc::ResizeNearestNeighbor_Cpp(
 
     if (srcRectW <= 0 || srcRectH <= 0) return;
 
-    // Fill background (black) if letterboxing
-    if (actualWidth < dstWidth || actualHeight < dstHeight) {
-        // This is simplified; assumes black background is already cleared or we need to clear strict areas
-        // For performance, we assume caller clears buffer or we fill partial
-        // Here we just loop through target lines
-    }
+    // レターボックス時の黒帯描画は呼び出し元 (FillOutputBuffer) で ZeroMemory 済み
 
     // ソース矩形に基づいてスケーリング係数を計算
     float scaleX = (float)srcRectW / actualWidth;
@@ -182,10 +166,6 @@ void LR2BGAImageProc::ResizeNearestNeighbor_Cpp(
     }
 }
 
-
-//------------------------------------------------------------------------------
-// Wrapper: ResizeBilinear
-//------------------------------------------------------------------------------
 //------------------------------------------------------------------------------
 // Wrapper: ResizeBilinear
 //------------------------------------------------------------------------------
@@ -341,6 +321,15 @@ void LR2BGAImageProc::ResizeBilinear_SSE41(
 {
     // Basic verification
     if (actualW <= 0 || actualH <= 0) return;
+
+    // SSE41版は *(int*) でピクセルを読み込むため、RGB32 (4バイト) 専用
+    // RGB24 (3バイト) の場合はCppOpt版にフォールバック
+    if (srcBpp != 32) {
+        ResizeBilinear_CppOpt(pSrc, srcW, srcH, srcStride, srcBpp,
+                              pDst, dstW, dstH, dstStride, dstBpp,
+                              actualW, actualH, offX, offY, pSrcRect, lutIndices, lutWeights);
+        return;
+    }
 
     RECT rect = { 0, 0, srcW, srcH };
     if (pSrcRect) rect = *pSrcRect;
