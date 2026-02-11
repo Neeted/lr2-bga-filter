@@ -15,7 +15,7 @@ LR2 (Lunatic Rave 2) 用の DirectShow フィルターです。BGA の再生品�
   - 輝度調整
   - fps制限
   - 音声トラックの自動破棄
-    - [無音トラック由来のトラブル](docs/en/LR2_BGA_Stuttering_Investigation_and_Solutions.md)を回避できます
+    - [無音トラック由来のトラブル](docs/ja/LR2_BGA_Stuttering_Investigation_and_Solutions.md)を回避できます
 
 ## 動作要件・設定 (重要)
 
@@ -66,7 +66,7 @@ DirectShow自体がレガシーな技術であり、現代の一般的な用途�
 
 ## 設定方法
 
-詳しい設定方法は[設定方法](docs/en/LR2BGAFilterConfigurationTool.md)を参照してください。
+詳しい設定方法は[設定方法](docs/ja/LR2BGAFilterConfigurationTool.md)を参照してください。
 
 1. `LR2BGAFilterConfigurationTool.bat` を実行します。
 2. 各種設定を行います。
