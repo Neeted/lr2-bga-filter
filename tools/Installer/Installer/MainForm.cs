@@ -41,6 +41,46 @@ namespace Installer
             { "{EE30215D-164F-4A92-A4EB-9D4C13390F9F}", "LAV Video Decoder" },
         };
 
+        // Localization
+        private static System.Resources.ResourceManager _resourceManager;
+        private static System.Resources.ResourceManager _defaultResourceManager;
+
+        private string GetString(string name)
+        {
+            if (_resourceManager == null)
+            {
+                string baseName = "Installer.Resources.Strings";
+                var lang = System.Globalization.CultureInfo.CurrentUICulture.TwoLetterISOLanguageName;
+
+                if (lang == "ja") baseName = "Installer.Resources.Strings_ja";
+                else if (lang == "ko") baseName = "Installer.Resources.Strings_ko";
+
+                _resourceManager = new System.Resources.ResourceManager(baseName, typeof(MainForm).Assembly);
+            }
+
+            try
+            {
+                string val = _resourceManager.GetString(name);
+                if (!string.IsNullOrEmpty(val)) return val;
+            }
+            catch { }
+
+            // Fallback to default (English)
+            if (_defaultResourceManager == null)
+            {
+                _defaultResourceManager = new System.Resources.ResourceManager("Installer.Resources.Strings", typeof(MainForm).Assembly);
+            }
+
+            try
+            {
+                return _defaultResourceManager.GetString(name);
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
         public MainForm()
         {
             InitializeComponent();
@@ -51,8 +91,8 @@ namespace Installer
             // 管理者権限チェック
             if (!IsAdministrator())
             {
-                AppendLog("エラー: 管理者権限が必要です。", true);
-                MessageBox.Show("このアプリケーションを実行するには管理者権限が必要です。", "エラー", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                AppendLog(GetString("Error_AdminRequired"), true);
+                MessageBox.Show(GetString("Msg_AdminRequired"), GetString("Msg_Error"), MessageBoxButtons.OK, MessageBoxIcon.Error);
                 Application.Exit();
                 return;
             }
@@ -73,7 +113,7 @@ namespace Installer
             // Setup Install Mode UI
             chkAgreeInstall = new CheckBox
             {
-                Text = "レジストリ設定の変更に同意する",
+                Text = GetString("Check_Agree"),
                 AutoSize = true,
                 Location = new Point(10, 10),
                 Checked = false
@@ -82,7 +122,7 @@ namespace Installer
 
             lblInstallWarning = new Label
             {
-                Text = "※インストール時に以下の変更を行います(アンインストール時に復元可能):\n- LAV Filters のメリット値(優先度)の変更\n- DirectShow Preferred Filters (最優先フィルタ) の設定変更",
+                Text = GetString("Warning_Install"),
                 AutoSize = true,
                 Location = new Point(10, 40),
                 ForeColor = Color.Red
@@ -90,7 +130,7 @@ namespace Installer
 
             btnInstall = new Button
             {
-                Text = "インストール",
+                Text = GetString("Button_Install"),
                 Location = new Point(400, 10),
                 Size = new Size(120, 40),
                 Enabled = false
@@ -101,14 +141,14 @@ namespace Installer
             // Setup Uninstall Mode UI
             lblBackupStatus = new Label
             {
-                Text = "バックアップ状態を確認中...",
+                Text = GetString("Label_BackupStatus"),
                 AutoSize = true,
                 Location = new Point(10, 5)
             };
 
             chkRestoreLav = new CheckBox
             {
-                Text = "LAV Filtersの設定を元に戻す",
+                Text = GetString("Check_RestoreLav"),
                 AutoSize = true,
                 Location = new Point(10, 30),
                 Checked = true
@@ -116,7 +156,7 @@ namespace Installer
 
             chkRestorePreferred = new CheckBox
             {
-                Text = "Preferred Filtersの設定を元に戻す",
+                Text = GetString("Check_RestorePreferred"),
                 AutoSize = true,
                 Location = new Point(10, 55),
                 Checked = true
@@ -124,7 +164,7 @@ namespace Installer
 
             chkDeleteUserSettings = new CheckBox
             {
-                Text = "LR2 BGA Filterの設定(HKCU)を削除する",
+                Text = GetString("Check_DeleteUser"),
                 AutoSize = true,
                 Location = new Point(10, 80),
                 Checked = false
@@ -132,7 +172,7 @@ namespace Installer
 
             btnUninstall = new Button
             {
-                Text = "アンインストール",
+                Text = GetString("Button_Uninstall"),
                 Location = new Point(400, 10),
                 Size = new Size(120, 40)
             };
@@ -159,13 +199,13 @@ namespace Installer
 
         private void SetupInstallMode()
         {
-            lblTitle.Text = "LR2 BGA Filter インストール";
+            lblTitle.Text = GetString("Title_Install");
             pnlActions.Controls.Add(chkAgreeInstall);
             pnlActions.Controls.Add(lblInstallWarning);
             pnlActions.Controls.Add(btnInstall);
 
-            AppendLog("インストーラーを起動しました。");
-            AppendLog("インストールを開始するには、変更内容に同意して「インストール」をクリックしてください。");
+            AppendLog(GetString("Log_InstallerStarted"));
+            AppendLog(GetString("Log_StartInstall"));
 
             // Filter AX Path
             CheckFilterFile();
@@ -177,7 +217,7 @@ namespace Installer
 
         private void CheckFilterFile()
         {
-            AppendLog("LR2BGAFilter.ax の存在確認中...");
+            AppendLog(GetString("Log_CheckAx"));
 
             // Expected to be in the same directory as the installer
             string axPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "LR2BGAFilter.ax");
@@ -185,27 +225,27 @@ namespace Installer
             if (File.Exists(axPath))
             {
                 _axPath = axPath;
-                AppendLog($"LR2BGAFilter.ax が確認されました: {Path.GetFileName(axPath)}");
+                AppendLog(string.Format(GetString("Log_AxFound"), Path.GetFileName(axPath)));
             }
             else
             {
-                AppendLog($"[エラー] LR2BGAFilter.ax が見つかりません。", true);
-                AppendLog($"探索パス: {axPath}", true);
-                MessageBox.Show("LR2BGAFilter.ax が見つかりません。\nインストーラーと同じフォルダに配置してください。", "エラー", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                AppendLog(GetString("Error_AxNotFound"), true);
+                AppendLog(string.Format(GetString("Log_SearchPath"), axPath), true);
+                MessageBox.Show(GetString("Msg_AxNotFound_Body"), GetString("Msg_Error"), MessageBoxButtons.OK, MessageBoxIcon.Error);
                 pnlActions.Enabled = false;
             }
         }
 
         private void SetupUninstallMode()
         {
-            lblTitle.Text = "LR2 BGA Filter アンインストール";
+            lblTitle.Text = GetString("Title_Uninstall");
             pnlActions.Controls.Add(lblBackupStatus);
             pnlActions.Controls.Add(chkRestoreLav);
             pnlActions.Controls.Add(chkRestorePreferred);
             pnlActions.Controls.Add(chkDeleteUserSettings);
             pnlActions.Controls.Add(btnUninstall);
 
-            AppendLog("アンインストーラーを起動しました。");
+            AppendLog(GetString("Log_UninstallerStarted"));
 
             // For Uninstall, we just need to know if the file exists to unregister it, but even if it's gone we should proceed with cleanup.
             // But let's find the path if we can.
@@ -222,45 +262,47 @@ namespace Installer
             if (!lavBackupExists) chkRestoreLav.Checked = false;
             if (!prefBackupExists) chkRestorePreferred.Checked = false;
 
-            lblBackupStatus.Text = $"バックアップ: LAV={(lavBackupExists ? "あり" : "なし")}, Preferred={(prefBackupExists ? "あり" : "なし")}";
+            lblBackupStatus.Text = string.Format(GetString("Log_ShowBackupStatus"),
+                lavBackupExists ? GetString("Status_Exists") : GetString("Status_NotExists"),
+                prefBackupExists ? GetString("Status_Exists") : GetString("Status_NotExists"));
         }
 
         private void CheckLavFilters()
         {
-            AppendLog("LAV Filters (x86) の存在確認中...");
+            AppendLog(GetString("Log_CheckLav"));
             bool missing = false;
             foreach (var kvp in LavFilterGuids)
             {
                 string keyPath = $@"{DIRECTSHOW_FILTER_CLSID_INSTANCE}\{kvp.Key}";
                 if (!RegistryHelper.RegistryKeyExists(keyPath))
                 {
-                    AppendLog($"[エラー] {kvp.Value} が見つかりません。", true);
+                    AppendLog(string.Format(GetString("Error_LavNotFound"), kvp.Value), true);
                     missing = true;
                 }
             }
 
             if (missing)
             {
-                AppendLog("LAV Filters (x86) がインストールされていないため、処理を続行できません。", true);
-                MessageBox.Show("LAV Filters (x86) が見つかりません。\nLAVFilters (x86) をインストールしてから再実行してください。", "エラー", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                AppendLog(GetString("Msg_LavNotFound_Body2"), true);
+                MessageBox.Show(GetString("Msg_LavNotFound_Body2"), GetString("Msg_Error"), MessageBoxButtons.OK, MessageBoxIcon.Error);
                 // Disable UI
                 pnlActions.Enabled = false;
             }
             else
             {
-                AppendLog("LAV Filters (x86) が確認されました。");
+                AppendLog(GetString("Log_LavFound"));
             }
         }
 
         private async void BtnInstall_Click(object sender, EventArgs e)
         {
             pnlActions.Enabled = false;
-            AppendLog("\n[インストール開始]");
+            AppendLog(Environment.NewLine + GetString("Log_InstallBegin"));
 
             await Task.Run(() => PerformInstall());
 
             pnlActions.Enabled = true;
-            MessageBox.Show("インストールが完了しました。\n再起動を推奨します。", "完了", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            MessageBox.Show(GetString("Msg_InstallComplete"), GetString("Title_Complete"), MessageBoxButtons.OK, MessageBoxIcon.Information);
 
             ShowCompletionUI();
         }
@@ -268,7 +310,7 @@ namespace Installer
         private async void BtnUninstall_Click(object sender, EventArgs e)
         {
             pnlActions.Enabled = false;
-            AppendLog("\n[アンインストール開始]");
+            AppendLog(Environment.NewLine + GetString("Log_UninstallBegin"));
 
             bool restoreLav = chkRestoreLav.Checked;
             bool restorePref = chkRestorePreferred.Checked;
@@ -278,7 +320,7 @@ namespace Installer
 
             pnlActions.Enabled = true;
 
-            MessageBox.Show("アンインストールが完了しました。", "完了", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            MessageBox.Show(GetString("Msg_UninstallComplete"), GetString("Title_Complete"), MessageBoxButtons.OK, MessageBoxIcon.Information);
 
             ShowCompletionUI();
         }
@@ -289,14 +331,14 @@ namespace Installer
 
             var btnExit = new Button
             {
-                Text = "終了",
+                Text = GetString("Button_Exit"),
                 Location = new Point((pnlActions.Width - 120) / 2, 30), // Center
                 Size = new Size(120, 40)
             };
             btnExit.Click += (s, e) => Application.Exit();
 
             pnlActions.Controls.Add(btnExit);
-            AppendLog("\n[全ての処理が完了しました。終了ボタンを押して閉じてください。]");
+            AppendLog(Environment.NewLine + GetString("Log_Complete"));
         }
 
         private void AppendLog(string text, bool error = false)
@@ -318,14 +360,14 @@ namespace Installer
             try
             {
                 // 1. LAV Check (Already done at startup, but double check)
-                AppendLog("Checking LAV Filters...");
+                AppendLog(GetString("Log_CheckLav"));
                 foreach (var kvp in LavFilterGuids)
                 {
                     string keyPath = $@"{DIRECTSHOW_FILTER_CLSID_INSTANCE}\{kvp.Key}";
                     if (!RegistryHelper.RegistryKeyExists(keyPath))
                     {
-                        AppendLog($"[エラー] {kvp.Value} が見つかりません。", true);
-                        MessageBox.Show($"LAV Filters (x86) が見つかりません。\n不足コンポーネント: {kvp.Value}", "エラー", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                        AppendLog(string.Format(GetString("Error_LavNotFound"), kvp.Value), true);
+                        MessageBox.Show(string.Format(GetString("Msg_LavNotFound_Body"), kvp.Value), GetString("Msg_Error"), MessageBoxButtons.OK, MessageBoxIcon.Error);
                         return;
                     }
                 }
@@ -333,7 +375,7 @@ namespace Installer
                 // 2. Modify LAV Merit
                 if (chkAgreeInstall.Checked)
                 {
-                    AppendLog("Backing up LAV settings...");
+                    AppendLog(GetString("Log_BackupLav"));
                     foreach (var kvp in LavFilterGuids)
                     {
                         string keyPath = $@"{DIRECTSHOW_FILTER_CLSID_INSTANCE}\{kvp.Key}";
@@ -341,7 +383,7 @@ namespace Installer
                         RegistryHelper.BackupRegistryKey("HKLM", keyPath, Path.GetFullPath($"{safeName}.reg"));
                     }
 
-                    AppendLog("Modifying LAV Merit values...");
+                    AppendLog(GetString("Log_ModifyLav"));
                     // Merit Values
                     const int MERIT_LAV_SPLITTER = unchecked((int)0xff800004);
                     const int MERIT_LAV_VIDEO = unchecked((int)0xff800003);
@@ -357,25 +399,25 @@ namespace Installer
                             byte[] meritBytes = BitConverter.GetBytes(merit);
                             Array.Copy(meritBytes, 0, data, 4, 4);
                             RegistryHelper.SetRegistryValue(keyPath, "FilterData", data, RegistryValueKind.Binary);
-                            AppendLog($"Updated Merit for {kvp.Value}");
+                            AppendLog(string.Format(GetString("Log_UpdateMerit"), kvp.Value));
                         }
                     }
 
                     // 3. Preferred Filters
-                    AppendLog("Taking ownership of Preferred key...");
+                    AppendLog(GetString("Log_TakeOwnership"));
                     try
                     {
                         RegistryHelper.TakeOwnershipAndAllowAccess(PREFERRED_FILTERS_KEY);
                     }
                     catch (Exception ex)
                     {
-                        AppendLog($"[警告] Failed to take ownership: {ex.Message}", true);
+                        AppendLog(string.Format(GetString("Warning_TakeOwnershipFailed"), ex.Message), true);
                     }
 
-                    AppendLog("Backing up Preferred Filter settings...");
+                    AppendLog(GetString("Log_BackupPreferred"));
                     RegistryHelper.BackupRegistryKey("HKLM", PREFERRED_FILTERS_KEY, Path.GetFullPath("Preferred_default.reg"));
 
-                    AppendLog("Updating Preferred Filters...");
+                    AppendLog(GetString("Log_UpdatePreferred"));
                     var PreferredFilterSettings = new Dictionary<string, string>
                     {
                         // CodecTweakToolの`Preferred decoders`で設定できる項目を参考にした
@@ -430,36 +472,36 @@ namespace Installer
                         RegistryHelper.SetRegistryValue(PREFERRED_FILTERS_KEY, kvp.Key, kvp.Value, RegistryValueKind.String);
                     }
 
-                    AppendLog("Restoring ownership to TrustedInstaller...");
+                    AppendLog(GetString("Log_RestoreOwnership"));
                     try
                     {
                         RegistryHelper.ReturnOwnershipToTrustedInstaller(PREFERRED_FILTERS_KEY);
                     }
                     catch (Exception ex)
                     {
-                        AppendLog($"[警告] Failed to restore ownership: {ex.Message}", true);
+                        AppendLog(string.Format(GetString("Warning_RestoreOwnershipFailed"), ex.Message), true);
                     }
                 }
 
                 // 4. Register AX
-                AppendLog("Registering LR2BGAFilter.ax...");
+                AppendLog(GetString("Log_RegisterAx"));
 
                 if (File.Exists(_axPath))
                 {
                     if (FilterRegistrar.RegisterFilter(_axPath))
-                        AppendLog("Filter Registered Successfully.");
+                        AppendLog(GetString("Log_RegisterSuccess"));
                     else
-                        AppendLog("[エラー] Failed to register filter logic.", true);
+                        AppendLog(GetString("Error_RegisterFailed"), true);
                 }
                 else
                 {
-                    AppendLog($"[エラー] LR2BGAFilter.ax not found at {_axPath}", true);
+                    AppendLog(string.Format(GetString("Error_AxNotFound"), _axPath), true);
                 }
             }
             catch (Exception ex)
             {
-                AppendLog($"[致命的エラー] {ex.Message}\n{ex.StackTrace}", true);
-                MessageBox.Show($"予期しないエラーが発生しました:\n{ex.Message}", "エラー", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                AppendLog(string.Format(GetString("Error_Unexpected"), ex.Message + "\n" + ex.StackTrace), true);
+                MessageBox.Show(string.Format(GetString("Error_Unexpected"), ex.Message), GetString("Msg_Error"), MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
@@ -477,7 +519,7 @@ namespace Installer
                         if (File.Exists(backupFile))
                         {
                             RegistryHelper.RestoreRegistryKey(Path.GetFullPath(backupFile));
-                            AppendLog($"Restored {kvp.Value} settings.");
+                            AppendLog(string.Format(GetString("Log_RestoreLav"), kvp.Value));
                             try { File.Delete(backupFile); } catch { }
                         }
                     }
@@ -493,25 +535,25 @@ namespace Installer
                     }
                     catch (Exception ex)
                     {
-                        AppendLog($"[警告] Failed to take ownership: {ex.Message}", true);
+                        AppendLog(string.Format(GetString("Warning_TakeOwnershipFailed"), ex.Message), true);
                     }
 
                     // Restore to backup state: Delete existing values first (to remove any added keys) then import
-                    AppendLog("Cleaning up current Preferred settings...");
+                    AppendLog(GetString("Log_CleanupPreferred"));
                     RegistryHelper.DeleteAllRegistryValues(PREFERRED_FILTERS_KEY);
 
                     RegistryHelper.RestoreRegistryKey(Path.GetFullPath("Preferred_default.reg"));
-                    AppendLog("Restored Preferred settings.");
+                    AppendLog(GetString("Log_RestorePreferred"));
 
                     // Restore ownership
                     try
                     {
                         RegistryHelper.ReturnOwnershipToTrustedInstaller(PREFERRED_FILTERS_KEY);
-                        AppendLog("Restored ownership to TrustedInstaller.");
+                        AppendLog(GetString("Log_RestoreOwnershipTrusted"));
                     }
                     catch (Exception ex)
                     {
-                        AppendLog($"[警告] Failed to restore ownership: {ex.Message}", true);
+                        AppendLog(string.Format(GetString("Warning_RestoreOwnershipFailed"), ex.Message), true);
                     }
 
                     // Cleanup backup
@@ -519,12 +561,12 @@ namespace Installer
                 }
 
                 // 3. Unregister AX
-                AppendLog("Unregistering LR2BGAFilter.ax...");
+                AppendLog(GetString("Log_UnregisterAx"));
 
                 if (File.Exists(_axPath))
                 {
                     if (FilterRegistrar.UnregisterFilter(_axPath))
-                        AppendLog("Filter Unregistered Successfully.");
+                        AppendLog(GetString("Log_UnregisterSuccess"));
                 }
 
                 // 4. Cleanup HKCU Settings
@@ -536,19 +578,19 @@ namespace Installer
                         try
                         {
                             RegistryHelper.DeleteCurrentUserSubKeyTree(USER_SETTINGS_KEY);
-                            AppendLog("Deleted user settings.");
+                            AppendLog(GetString("Log_DeleteUser"));
                         }
                         catch (Exception ex)
                         {
-                            AppendLog($"[警告] Failed to delete user settings: {ex.Message}", true);
+                            AppendLog(string.Format(GetString("Warning_DeleteUserFailed"), ex.Message), true);
                         }
                     }
                 }
             }
             catch (Exception ex)
             {
-                AppendLog($"[致命的エラー] {ex.Message}\n{ex.StackTrace}", true);
-                MessageBox.Show($"予期しないエラーが発生しました:\n{ex.Message}", "エラー", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                AppendLog(string.Format(GetString("Error_Unexpected"), ex.Message + "\n" + ex.StackTrace), true);
+                MessageBox.Show(string.Format(GetString("Error_Unexpected"), ex.Message), GetString("Msg_Error"), MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
     }
