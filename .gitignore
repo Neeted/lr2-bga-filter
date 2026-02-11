@@ -28,3 +28,6 @@ Desktop.ini
 
 # Temporary files
 .tmp/
+
+dest/
+dist/
