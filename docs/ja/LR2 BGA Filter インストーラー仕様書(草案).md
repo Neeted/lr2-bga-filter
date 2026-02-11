@@ -1,4 +1,4 @@
-# LR2 BGA Filter インストーラー仕様書
+# LR2 BGA Filter インストーラー仕様書(草案)
 
 ## 概要
 

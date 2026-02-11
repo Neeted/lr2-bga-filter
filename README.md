@@ -1,70 +1,84 @@
 # LR2 BGA Filter
 
-LR2 (Lunatic Rave 2) 用の DirectShow フィルターです。BGA の再生品質とパフォーマンスを改善することを目的としています。
+[![Japanese](https://img.shields.io/badge/lang-Japanese-blue.svg)](README.ja.md)
+[![English](https://img.shields.io/badge/lang-English-red.svg)](README.md)
+[![Korean](https://img.shields.io/badge/lang-Korean-red.svg)](README.ko.md)
 
-## 特徴
+DirectShow filter for LR2 (Lunatic Rave 2). Aims to improve BGA playback quality and performance.
 
-- **高解像度動画の適切な処理**: 適切なダウンスケーリングにより画質とパフォーマンスを両立します。
-- **その他の機能**:
-  - 黒帯 (レターボックス) の自動検出・除去
-  - 外部ウィンドウでのBGA表示
-  - 輝度調整
-  - fps制限
-  - 音声トラックの自動破棄
-    - [無音トラック由来のトラブル](doc/LR2におけるBGA再生開始時のカクつき（スタッタリング）に関する調査報告と対策.md)を回避できます
+## Features
 
-## 動作要件・設定 (重要)
+- **Proper handling of high-resolution videos**: Balances image quality and performance with appropriate downscaling.
+- **Other features**:
+  - Auto black bar (letterbox) detection/removal
+  - BGA display in external window
+  - Brightness adjustment
+  - FPS limit
+  - Auto discard audio tracks
+    - Avoids [troubles caused by silent tracks](docs/en/LR2_BGA_Stuttering_Investigation_and_Solutions.md)
 
-本フィルターを正常に動作させるためには、**LAVFilters** の導入と、以下の特殊な設定が必要です。
+## Requirements & Settings (IMPORTANT)
 
-1. **LAVFilters のインストール**
-    - 本フィルターは LAVFilters(LAV Splitter, LAV Video Decoder) と組み合わせて使用することを前提としています。
-    - [LAV Filtersのダウンロード](https://github.com/nevcairiel/lavfilters/releases) `LAVFilters-*.**-Installer.exe` をダウンロードしてください。
-    - LAV Splitter (x86), LAV Video Decoder (x86) をインストールしてください。他は不要です。
+To make this filter work properly, **LAVFilters** installation and the following special settings are required.
 
-2. **LAV Video Decoder の設定**
-    - **主要なフォーマットの有効化**: ほぼ全ての Input Formats (H.264, HEVC, MPEG4等) を有効のままにしてください。デフォルトで有効になっているはずです。
-    - **出力色空間の制限 (Output Formats)**: **RGB32 のみをチェックし、他をすべて外してください。**
-        - *理由*: LR2 本体は RGB24 入力しか受け付けません。LAV の出力を RGB32 に限定することで、「LAV (RGB32) -> [本フィルター] -> LR2 (RGB24)」という経路を意図的に成立させ、本フィルターが強制的に使用されるようにします。
+1. **Install LAVFilters**
+    - This filter assumes use with LAVFilters (LAV Splitter, LAV Video Decoder).
+    - [Download LAV Filters](https://github.com/nevcairiel/lavfilters/releases) Download `LAVFilters-*.**-Installer.exe`.
+    - Install LAV Splitter (x86), LAV Video Decoder (x86). Others are unnecessary.
 
-3. **メリット値 (優先度) の設定**
-    - インストーラーにより本フィルター (`LR2BGAFilter`) は **最も高い優先度 (Merit Value)** に設定されます。
-    - **2番目に LAV Video Decoder** が来るように設定されます。
-    - *注意*: この順序を守らないと、OS標準の `quartz.dll` 等が優先されてしまい本フィルターが使用されない場合があります。
+2. **LAV Video Decoder Settings**
+    - **Enable Major Formats**: Keep almost all Input Formats (H.264, HEVC, MPEG4, etc.) enabled. Should be enabled by default.
+    - **Output Formats**: **Check ONLY RGB32 and uncheck everything else.**
+        - *Reason*: LR2 only accepts RGB24 input. By limiting LAV output to RGB32, we intentionally establish the route "LAV (RGB32) -> [This Filter] -> LR2 (RGB24)", forcing this filter to be used.
 
-### 注意事項 (免責)
+3. **Merit Value (Priority) Settings**
+    - The installer sets this filter (`LR2BGAFilter`) to **Highest Priority (Merit Value)**.
+    - **LAV Video Decoder** is set to 2nd place.
+    - *Note*: If this order is not followed, OS standard `quartz.dll` etc. might take priority and this filter might not be used.
 
-上記の設定（LAVの出力制限やメリット値の変更）は、32bit版のDirectShowを使用するシステム全体（他の動画プレイヤーなど）に影響を与える可能性があります。
-DirectShow自体がレガシーな技術であり、現代の一般的な用途では影響は限定的と思われますが、ご了承の上で適用してください。
+### Disclaimer
 
-## 配布パッケージ構成
+The above settings (LAV output restriction and Merit Value changes) might affect the entire system using 32bit DirectShow (other video players etc.).
+DirectShow itself is a legacy technology, so the impact on modern general usage should be limited, but please apply at your own discretion.
 
-リリースパッケージは以下の構成となっています。
+## Package Structure
+
+The release package consists of:
 
 ```text
 / (root)
-├── LR2BGAFilter.ax   (フィルター本体)
-├── Installer.exe     (インストール/アンインストール用)
-├── LR2BGAFilterConfigurationTool.bat (設定画面起動用)
-└── README.md         (本書)
+├── LR2BGAFilter.ax   (Filter binary)
+├── Installer.exe     (For Install/Uninstall)
+├── LR2BGAFilterConfigurationTool.bat (For Settings)
+└── README.md         (This file)
 ```
 
-## インストール方法
+## How to Install
 
-前述の通り、LAV Filtersの導入と設定が必要です。その後、以下の手順でインストールします。
+As mentioned, LAV Filters installation and settings are required. Then install as follows:
 
-1. [Releases] ページから最新の ZIP をダウンロードします。
-2. 任意のフォルダに解凍します。`C:\Bin\LR2BGAFilter` など
-3. `Installer.exe` を実行します。
+1. Download latest ZIP from [Releases].
+2. Extract to arbitrary folder. e.g. `C:\Bin\LR2BGAFilter`
+3. Run `Installer.exe`.
+    - Tips: You can force language display with command line args `.\Installer.exe /lang:ja` `.\Installer.exe /lang:en` `.\Installer.exe /lang:ko`. Default is OS setting.
+4. Agree to registry changes for LAVFilters as mentioned and execute install.
+5. After installation, run `LR2BGAFilterConfigurationTool.bat` to configure.
 
-## 設定方法
+## How to Configure
 
-詳しい設定方法は[設定方法](doc/LR2BGAFilterConfigurationTool.md)を参照してください。
+Refer to [Configuration Guide](docs/en/LR2BGAFilterConfigurationTool.md) for details.
 
-1. `LR2BGAFilterConfigurationTool.bat` を実行します。
-2. 各種設定を行います。
-3. `OK` ボタンを押して設定を保存します。
+1. Run `LR2BGAFilterConfigurationTool.bat`.
+2. Configure settings.
+3. Click `OK` button to save.
 
-## ライセンス
+## How to Uninstall
+
+1. Run `Installer.exe`.
+2. Automatically switches to uninstall mode if installed.
+3. Choose to restore backup or delete user settings.
+4. Click button to uninstall.
+
+## License
 
 [MIT License](LICENSE)
