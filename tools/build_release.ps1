@@ -39,7 +39,7 @@ Write-Host "Copying files..." -ForegroundColor Yellow
 
 $FilesToCopy = @(
     @{ Src = "$RootDir\bin\Win32\Release\LR2BGAFilter.ax"; Dest = "." },
-    @{ Src = "$RootDir\bin\Win32\Release\LR2BGAFilterConfigurationTool.bat"; Dest = "." },
+    @{ Src = "$RootDir\tools\LR2BGAFilterConfigurationTool.bat"; Dest = "." },
     @{ Src = "$RootDir\tools\Installer\Installer\bin\Release\net472\win-x86\Installer.exe"; Dest = "." },
     @{ Src = "$RootDir\README.md"; Dest = "." },
     @{ Src = "$RootDir\README.ja.md"; Dest = "." },

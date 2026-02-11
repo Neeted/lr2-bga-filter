@@ -32,7 +32,7 @@ jobs:
         New-Item -ItemType Directory -Force -Path $DistDir
 
         Copy-Item "bin/Win32/Release/LR2BGAFilter.ax" -Destination $DistDir
-        Copy-Item "bin/Win32/Release/LR2BGAFilterConfigurationTool.bat" -Destination $DistDir
+        Copy-Item "tools\LR2BGAFilterConfigurationTool.bat" -Destination $DistDir
         Copy-Item "tools/Installer/Installer/bin/Release/net472/win-x86/Installer.exe" -Destination $DistDir
         Copy-Item "README.md" -Destination $DistDir
         Copy-Item "README.ja.md" -Destination $DistDir
