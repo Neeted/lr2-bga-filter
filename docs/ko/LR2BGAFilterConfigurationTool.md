@@ -64,7 +64,7 @@ LR2BGAFilterConfigurationTool는 LR2BGAFilter의 설정을 수행하기 위한 �
 - [ ] Debug Mode (Info Window): 동영상 재생 중에 디버그 윈도우를 표시합니다. 게임 패드의 버튼 번호나 키 코드 등을 확인할 수 있습니다.
 - [ ] Auto Open Properties: 동영상 재생 시에 설정 화면이 자동으로 열리게 됩니다. 초기 설정 시에 편리합니다.
 
-## 보충
+## 추가 설명
 
 - 설정치는 레지스트리 `HKEY_CURRENT_USER\SOFTWARE\LR2BGAFilter`에 보존됩니다. 설정 파일이 아닌 레지스트리를 이용하는 이유는, 동영상 재생 시에 파일 IO를 발생시키지 않고 기동 속도를 저하시키지 않기 때문입니다.
 - 처리 순서를 알기 힘들지도 모르기 때문에 보충합니다.
