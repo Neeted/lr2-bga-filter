@@ -1,74 +1,74 @@
 # LR2BGAFilterConfigurationTool
 
-## 概要
+## Overview
 
-LR2BGAFilterConfigurationToolは、LR2BGAFilterの設定を行うためのツールです。
+LR2BGAFilterConfigurationTool is a tool for configuring LR2BGAFilter.
 
-## 使い方
+## How to Use
 
-1. `LR2BGAFilterConfigurationTool.bat` を実行します。
-2. 各種設定を行います。
-3. `OK` ボタンを押して設定を保存します。
+1. Run `LR2BGAFilterConfigurationTool.bat`.
+2. Configure settings.
+3. Click `OK` button to save.
 
-## 設定項目
+## Settings
 
 ### LR2 Output
 
-- [ ] Dummy: LR2にダミー黒画面(1x1)を1フレームだけ出力します。
-- [ ] Passthrough: 入力解像度のままLR2に出力します。黒帯除去は適用されます。
-- [ ] Keep Aspect: 入力動画のアスペクト比を維持するために黒帯を付加してLR2に出力します。
-- [ ] Limit FPS: LR2に出力するフレームレートを制限します。
-- Size: LR2に出力する解像度を設定します。**スキンのBGA描画領域**に合わせることを推奨します。きちんと合わせてKeep Aspectを有効にすればLR2側でのリサイズが発生しないのでアスペクト比維持が実現できます。
-- Algo: リサイズアルゴリズムを選択します。
-  - Nearest Neighbor: 最速ですが画質は低いです。
-  - Bilinear: パフォーマンスと画質のバランスが良いです。全力で並列化されています。
-- Brightness: スライダーでBGAの輝度を調整します。
+- [ ] Dummy: Output a dummy black screen (1x1) to LR2 for 1 frame only.
+- [ ] Passthrough: Output to LR2 at input resolution. Black bar removal is applied.
+- [ ] Keep Aspect: Add black bars to maintain input video aspect ratio when outputting to LR2.
+- [ ] Limit FPS: Limit output frame rate to LR2.
+- Size: Set output resolution to LR2. **Recommended to match skin's BGA display area**. If matched correctly and Keep Aspect is enabled, no resizing occurs on LR2 side, achieving aspect ratio preservation.
+- Algo: Select resize algorithm.
+  - Nearest Neighbor: Fastest but output quality is low.
+  - Bilinear: Good balance of performance and quality. Fully parallelized.
+- Brightness: Adjust BGA brightness with slider.
 
 ### External Window
 
-ドラッグで移動が可能です。
+Draggable to move.
 
-- [ ] Enable: 外部ウィンドウでBGAを表示します。
-- [ ] Passthrough: 入力解像度のまま外部ウィンドウに出力します。Sizeで設定した値は無視されます。黒帯除去は適用されます。
-- [ ] Keep Aspect: 入力動画のアスペクト比を維持するために黒帯を付加して外部ウィンドウに出力します。
-- Pos: 外部ウィンドウの表示位置を設定します。マウスで移動した位置は自動で保存されます。
-- Size: 外部ウィンドウのサイズを設定します。
-- Algo: リサイズアルゴリズムを選択します。LR2と外部ウィンドウで別々に設定できます。
-- Z-Order: 外部ウィンドウのZ-Orderを設定します。
-  - Top: 常に最前面に表示します。
-  - Bottom: 起動時に最背面に表示します。
-- Brightness: スライダーでBGAの輝度を調整します。黒一色のオーバーレイウィンドウの透明度を調整します。これによりOBSなどのキャプチャソフトで輝度調整前のBGAをキャプチャできます。
+- [ ] Enable: Display BGA in external window.
+- [ ] Passthrough: Output to external window at input resolution. Size setting is ignored. Black bar removal is applied.
+- [ ] Keep Aspect: Add black bars to maintain input video aspect ratio when outputting to external window.
+- Pos: Set external window position. Position moved by mouse is automatically saved.
+- Size: Set external window size.
+- Algo: Select resize algorithm. Can be set separately from LR2 output.
+- Z-Order: Set Z-Order of external window.
+  - Top: Always on top.
+  - Bottom: Bottom-most on startup.
+- Brightness: Adjust BGA brightness with slider. This adjusts transparency of black overlay window. This allows capturing pre-brightness-adjusted BGA with capture software like OBS.
 
 ### External Window Close Triggers
 
-- [ ] R-Click: 外部ウィンドウを右クリックで閉じるようになります。
-- [ ] Gamepad: ゲームパッドの指定したボタンを押すと外部ウィンドウを閉じます。
-  - [ ] ID: ゲームパッドのIDを設定します。1つしかゲームパッドを接続していない場合は0のはずです。
-  - [ ] Btn: ゲームパッドのボタン番号を設定します。
-  - IDとBtnは後述の設定で有効化できるデバッグウィンドウの表示を参考にしてください。
-- [ ] Keyboard: キーボードの指定したキーを押すと外部ウィンドウを閉じます。
-  - Key Code: キーコードを設定します。16進数で入力します。例: 0xD (Enterキー)。デバッグウィンドウの表示を参考にしてください。
-- [ ] Result Screen: リザルト画面遷移時に自動で外部ウィンドウを閉じます。
-  - *注意*: **この機能はLR2のメモリを読み取ることでリザルト画面遷移を検知します。クリーンな実装とは言えないので気になる方は使用しないでください。**
+- [ ] R-Click: Close external window with right click.
+- [ ] Gamepad: Close external window when specified button on gamepad is pressed.
+  - [ ] ID: Gamepad ID. Should be 0 if only one gamepad is connected.
+  - [ ] Btn: Gamepad button number.
+  - ID and Btn can be checked in debug window (see below).
+- [ ] Keyboard: Close external window when specified key is pressed.
+  - Key Code: Set key code. Input in hex. e.g. 0xD (Enter key). Refer to debug window.
+- [ ] Result Screen: Automatically close external window on result screen transition.
+  - *Note*: **This feature detects transition by reading LR2 memory. It's not a clean implementation, so do not use if concerned.**
 
 ### Auto Letterbox Removal
 
-16:9へのクロップと4:3へのクロップに対応しています。
+Supports cropping to 16:9 and 4:3.
 
-- [ ] Enable: 黒帯除去を有効にします。
-- Threshold: 黒帯除去の閾値を設定します。閾値以下の輝度のピクセルを黒として判定に使います。
-- Stable: 黒帯除去切り替えの連続判定回数を設定します。200ms秒に1回判定を行うので、3を設定すると600ms秒以上黒帯が続かないと黒帯が除去されません。
+- [ ] Enable: Enable black bar removal.
+- Threshold: Set threshold for black bar removal. Pixels below threshold are considered black.
+- Stable: Set consecutive detection count for switching. Detection runs once every 200ms, so 3 means black bars must persist for over 600ms to be removed.
 
 ### Other
 
-- [ ] Debug Mode (Info Window): 動画再生中にデバッグウィンドウを表示します。ゲームパッドのボタン番号やキーコードなどを確認できます。
-- [ ] Auto Open Properties: 動画再生時に設定画面が自動で開くようになります。初期設定時に便利です。
+- [ ] Debug Mode (Info Window): Display debug window during video playback. You can check gamepad button numbers and key codes.
+- [ ] Auto Open Properties: Automatically open settings screen during video playback. Useful for initial setup.
 
-## 捕捉
+## Supplementary Notes
 
-- 設定値はレジストリ`HKEY_CURRENT_USER\SOFTWARE\LR2BGAFilter`に保存されます。設定ファイルではなくレジストリを利用する理由は、動画再生時にファイルIOを発生させず起動速度を低下させないためです。
-- 処理順序が分かりにくいかもしれないので捕捉します。
-  - 黒帯除去は入力されたフレームに対して最初に行われます。
-  - なのでLR2用に1:1で黒帯が付いているBGAに黒帯除去を適用して、Keep Aspect無効で出力すると、縦に引き伸ばされたBGAが表示されると思います。Keep Aspectを有効にすれば元の1:1で黒帯が付いたBGAと同じ見た目になると思います。
-  - 元が16:9で黒帯が付いていないBGAでは黒帯除去は適用されず、Keep Aspect有効だと出力サイズに合わせて黒帯が付加されます。
-  - **つまり何が言いたいのかというとAuto Letterbox RemovalとKeep Aspectは常に両方有効にしておくのがおすすめです。** BGA表示領域が1:1じゃないスキンでもいい感じに表示されるはずです。
+- Settings are saved in registry `HKEY_CURRENT_USER\SOFTWARE\LR2BGAFilter`. The reason for using registry instead of file is to avoid file I/O during video playback and prevent startup delay.
+- Supplementary explanation on processing order as it might be confusing:
+  - Black bar removal is performed first on the input frame.
+  - So if you apply black bar removal to a BGA with 1:1 black bars for LR2 and output with Keep Aspect disabled, it will look vertically stretched. If Keep Aspect is enabled, it should look the same as original 1:1 BGA with black bars.
+  - For 16:9 BGA without black bars, black bar removal is not applied, and if Keep Aspect is enabled, black bars are added according to output size.
+  - **In short, it is recommended to always keep both Auto Letterbox Removal and Keep Aspect enabled.** It should display nicely even on skins where BGA area is not 1:1.

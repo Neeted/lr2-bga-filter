@@ -2,7 +2,7 @@
 
 [![Japanese](https://img.shields.io/badge/lang-Japanese-blue.svg)](README.ja.md)
 [![English](https://img.shields.io/badge/lang-English-red.svg)](README.md)
-[![Korean](https://img.shields.io/badge/lang-Korean-red.svg)](README.md)
+[![Korean](https://img.shields.io/badge/lang-Korean-red.svg)](README.ko.md)
 
 LR2 (Lunatic Rave 2) 用の DirectShow フィルターです。BGA の再生品質とパフォーマンスを改善することを目的としています。
 

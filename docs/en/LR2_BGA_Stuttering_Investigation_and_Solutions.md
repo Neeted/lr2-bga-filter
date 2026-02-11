@@ -1,177 +1,177 @@
-# LR2におけるBGA再生開始時のカクつき（スタッタリング）に関する調査報告と対策
+# Investigation Report and Solutions regarding Stuttering at BGA Playback Start in LR2
 
-## 1. 事象
+## 1. Phenomenon
 
-LR2（Lunatic Rave 2）において、特定の動画ファイル（BGA）が再生される瞬間、一瞬ノーツや映像が停止（カクつき）する現象が発生する。
-音声トラックが含まれているが、LR2上では音が出ないため実害はないように見えるが、内部処理で遅延を引き起こしている。
+In LR2 (Lunatic Rave 2), a phenomenon occurs where notes/video momentarily freeze (stutter) at the moment a specific video file (BGA) starts playing.
+Although there is an audio track, no sound is output on LR2, so it seems harmless, but it causes delay in internal processing.
 
-**【重要：高解像度ラグとの区別】**
-LR2の仕様（DirectX 9 / 32bit）に起因する「HD/FHD等の高解像度動画を再生した際に全体的にフレームレートが落ちる現象」とは**明確に区別される**。
+**[Important: Distinction from High-Resolution Lag]**
+This must be **clearly distinguished** from "phenomenon where frame rate drops overall when playing high-res videos (HD/FHD etc.)" caused by LR2 specs (DirectX 9 / 32bit).
 
-* **高解像度ラグ:** 動画の画素数が多すぎるために発生し、再生中常に重くなる。
-* **本事象:** 動画の解像度が低い軽量なファイルであっても、**再生開始の瞬間に**カクつきが発生する点が特徴である。
+* **High-Resolution Lag**: Caused by too many pixels, always heavy during playback.
+* **This Phenomenon**: Occurs even with low-res lightweight files, characterized by stutter **at the moment of playback start**.
 
-## 2. 原因：音声ストリームの「飢餓状態（Starvation）」
+## 2. Cause: Audio Stream "Starvation"
 
-直接の原因は、**動画ファイルに含まれる「異常な低ビットレートの音声トラック」とDirectShowの仕様との相性問題**である。
+The direct cause is **compatibility issue between "abnormal low bitrate audio track" in video file and DirectShow specifications**.
 
-* **詳細メカニズム:**
-  1. **異常なVBR音声:** 音声トラックが「AAC VBR（可変ビットレート）」でエンコードされており、かつ中身が「無音」または「ほぼ無音」である。
-  2. **データ供給不足:** VBRの特性により、無音区間のデータ量が極限まで削減（約2kbpsなど）されている。
-  3. **クロックの初期化遅延:** DirectShowの音声レンダラーは、再生開始に必要なバッファが埋まるまで待機する仕様がある。しかし、データがスカスカであるためバッファが埋まらず、リファレンスクロック（基準時計）が動き出さない。
-  4. **映像の巻き添え:** 音声レンダラーがマスタークロックとなっているため、時計が動くまで映像側も描画を停止せざるを得ず、カクつきが発生する。
+* **Detailed Mechanism:**
+  1. **Abnormal VBR Audio**: Audio track is encoded in "AAC VBR (Variable Bitrate)" and content is "silent" or "almost silent".
+  2. **Data Supply Shortage**: Due to VBR characteristics, data amount in silent sections is extremely reduced (e.g. approx 2kbps).
+  3. **Clock Initialization Delay**: DirectShow audio renderer waits until buffer required for playback start is filled. However, because data is sparse, buffer doesn't fill and Reference Clock doesn't start.
+  4. **Video Collateral Damage**: Since audio renderer becomes the Master Clock, video side is forced to stop drawing until the clock moves, causing stutter.
 
-* **判別方法（MediaInfo等）:**
-  * 形式: AAC (VBR)
-  * ビットレート: 極端に低い（例: 2kbps, 32kbps以下）
-  * ストリームサイズ: 極小（数KB〜数十KB）
+* **Identification Method (MediaInfo etc.):**
+  * Format: AAC (VBR)
+  * Bitrate: Extremely low (e.g. 2kbps, under 32kbps)
+  * Stream size: Tiny (few KB to tens of KB)
 
-## 3. 解決策
+## 3. Solutions
 
-以下の2つのアプローチがある。
-**方法A**は根本解決（ファイル修正）、**方法B**は環境設定による回避策（今回の結論）である。
+There are two approaches.
+**Method A** is root solution (file modification), **Method B** is workaround by environment settings (conclusion this time).
 
 ---
 
-### 方法A：動画ファイルから音声トラックを削除する（推奨・根本解決）
+### Method A: Delete Audio Track from Video File (Recommended / Root Solution)
 
-当該BGAファイルから、不要な音声トラックを物理的に削除する。
-`ffmpeg`を使用する場合、以下のコマンドで無劣化かつ高速に処理可能。
+Physically delete unnecessary audio track from BGA file.
+Using `ffmpeg`, it can be processed without re-encoding and fast with the following command:
 
 ```bash
 ffmpeg -i input.mp4 -c:v copy -an output.mp4
 ```
 
-* `-c:v copy`: 映像は再エンコードせずそのままコピー（画質劣化なし）。
-* `-an`: Audio None（音声を削除）。
+* `-c:v copy`: Copy video stream without re-encoding (no quality loss).
+* `-an`: Audio None (delete audio).
 
 ---
 
-### 方法B：Windows標準デコーダーを無効化する（環境回避策）
+### Method B: Disable Windows Standard Decoder (Environment Workaround)
 
-LR2（32bit）が使用する「Microsoft DTV-DVD Audio Decoder」をシステムレベルで無効化し、音声フィルタグラフの構築を失敗させることで、強制的に映像レンダラーをマスタークロックとして動作させる。
+System-level disable "Microsoft DTV-DVD Audio Decoder" used by LR2 (32bit), forcing failure of audio filter graph construction, thereby forcing video renderer to operate as Master Clock.
 
-#### 手順1：ターゲットとなるデコーダーの特定（32bit環境）
+#### Step 1: Identify Target Decoder (32bit Environment)
 
-LR2（32bitアプリ）が使用する可能性のある、Windows標準の VBR 対応音声デコーダーは以下の通り。
-これらすべてのメリット値を下げることで、標準デコーダーによる VBR 音声処理を完全にブロックできる。
+Windows standard VBR compatible audio decoders likely used by LR2 (32bit app) are following.
+Decreasing Merit Value for all of these can completely block VBR audio processing by standard decoders.
 
-##### 1. Microsoft DTV-DVD Audio Decoder（最重要ターゲット）
+##### 1. Microsoft DTV-DVD Audio Decoder (Primary Target)
 
-* **役割:** AAC, MPEG-2 Audio, MP2 のデコード（今回の主犯格）
-* **CLSID:** `{E1F1A0B8-BEEE-490D-BA7C-066C40B5E2B9}`
-* **対象レジストリ:** `\HKEY_LOCAL_MACHINE\SOFTWARE\WOW6432Node\Classes\CLSID\{083863F1-70DE-11D0-BD40-00A0C911CE86}\Instance\{E1F1A0B8-BEEE-490D-BA7C-066C40B5E2B9}`
-* **元メリット値** `0x005FFFFF (MERIT_NORMAL - 1)`
+* **Role**: Decode AAC, MPEG-2 Audio, MP2 (Main culprit this time)
+* **CLSID**: `{E1F1A0B8-BEEE-490D-BA7C-066C40B5E2B9}`
+* **Target Registry**: `\HKEY_LOCAL_MACHINE\SOFTWARE\WOW6432Node\Classes\CLSID\{083863F1-70DE-11D0-BD40-00A0C911CE86}\Instance\{E1F1A0B8-BEEE-490D-BA7C-066C40B5E2B9}`
+* **Original Merit**: `0x005FFFFF (MERIT_NORMAL - 1)`
 
 ##### 2. MPEG Audio Decoder
 
-* **役割:** MP3, MPEG-1 Audio (Layer I, II) のデコード（MP3 VBR対策）
-* **CLSID:** `{4A2286E0-7BEF-11CE-9BD9-0000E202599C}`
-* **対象レジストリ:** `\HKEY_LOCAL_MACHINE\SOFTWARE\WOW6432Node\Classes\CLSID\{083863F1-70DE-11D0-BD40-00A0C911CE86}\Instance\{4A2286E0-7BEF-11CE-9BD9-0000E202599C}`
-* **元メリット値** `0x03680001 (MERIT_PREFERRED + 2 よりも高くかなりの優先度)`
-* **注意:** 実体（quartz.dll）はシステム重要ファイルのため、絶対に削除・登録解除しないこと。メリット値変更のみに留める。以下のMPEG Layer-3も同様。
+* **Role**: Decode MP3, MPEG-1 Audio (Layer I, II) (MP3 VBR countermeasure)
+* **CLSID**: `{4A2286E0-7BEF-11CE-9BD9-0000E202599C}`
+* **Target Registry**: `\HKEY_LOCAL_MACHINE\SOFTWARE\WOW6432Node\Classes\CLSID\{083863F1-70DE-11D0-BD40-00A0C911CE86}\Instance\{4A2286E0-7BEF-11CE-9BD9-0000E202599C}`
+* **Original Merit**: `0x03680001 (Higher than MERIT_PREFERRED + 2, quite high)`
+* **Note**: Entity (quartz.dll) is system critical file, so NEVER delete/unregister. Only change Merit Value. Same for MPEG Layer-3 below.
 
 ##### 3. MPEG Layer-3
 
-* **役割:** 古い形式や特定の MP3 圧縮形式のデコード（予備、デフォルト値でも使われないと思われる）
-* **CLSID:** `{6A08CF80-0E18-11CF-A24D-0020AFD79767}`
-* **元メリット値** `MERIT_DO_NOT_USE (0x00200000)`
-* **対象レジストリ:** `\HKEY_LOCAL_MACHINE\SOFTWARE\WOW6432Node\Classes\CLSID\{083863F1-70DE-11D0-BD40-00A0C911CE86}\Instance\{6A08CF80-0E18-11CF-A24D-0020AFD79767}`
+* **Role**: Decode old formats or specific MP3 compression formats (Backup, likely not used by default)
+* **CLSID**: `{6A08CF80-0E18-11CF-A24D-0020AFD79767}`
+* **Original Merit**: `MERIT_DO_NOT_USE (0x00200000)`
+* **Target Registry**: `\HKEY_LOCAL_MACHINE\SOFTWARE\WOW6432Node\Classes\CLSID\{083863F1-70DE-11D0-BD40-00A0C911CE86}\Instance\{6A08CF80-0E18-11CF-A24D-0020AFD79767}`
 
 ---
 
-#### 手順2：メリット値（優先度）の変更手段を用意
+#### Step 2: Prepare Means to Change Merit Value (Priority)
 
-このフィルタのメリット値を`DO_NOT_USE (0x00200000)`以下、または`0`に変更する。
+Change Merit Value of these filters to `DO_NOT_USE (0x00200000)` or lower, or `0`.
 
-##### 推奨ツールリスト
+##### Recommended Tool List
 
 * [DirectShow Filter Tool (dftool)](https://web.archive.org/web/20241212203500/https://hp.vector.co.jp/authors/VA032094/DFTool.html)
-* [GraphStudioNext (32bit版)](https://github.com/cplussharp/graph-studio-next)
+* [GraphStudioNext (32bit)](https://github.com/cplussharp/graph-studio-next)
 * [DirectShow Filter Manager (DSFMgr)](https://www.videohelp.com/software/DirectShow-Filter-Manager)
 
-##### GraphStudioNextの使い方
+##### How to use GraphStudioNext
 
-1. **管理者権限で起動:** `graphstudionext.exe` (32bit版) を右クリックし「管理者として実行」。
-2. **フィルタ一覧を表示:** メニューの `Graph` > `Insert Filter...` を選択。
-3. **対象を検索:** 上記の名称（例: `Microsoft DTV-DVD Audio Decoder`）で検索。
-4. **メリット値変更:** フィルタ名を選択し、右ペインの`Change Merit` ボタンを押す。
-5. **値を設定:** `DO_NOT_USE (0x00200000)` 以下、または `0` を入力して適用する。
+1. **Run as Admin**: Right click `graphstudionext.exe` (32bit) and "Run as Administrator".
+2. **Show Filter List**: Menu `Graph` > `Insert Filter...`.
+3. **Search Target**: Search by name (e.g. `Microsoft DTV-DVD Audio Decoder`).
+4. **Change Merit**: Select filter name and click `Change Merit` button on right pane.
+5. **Set Value**: Input `DO_NOT_USE (0x00200000)` or lower, or `0`, and apply.
 
-※ 権限エラーが出る場合は以下の手順でレジストリ権限を操作する。
-
----
-
-#### 【オプション】手順3: TrustedInstaller権限の処理手順
-
-Windows標準フィルタは強力な保護がかかっているため、以下の順序で操作する必要がある。
-
-1. **レジストリエディタ起動:** 管理者権限で `regedit` を開く。
-2. **キーへ移動:** `HKEY_LOCAL_MACHINE\SOFTWARE\WOW6432Node\Classes\CLSID\{083863F1-70DE-11D0-BD40-00A0C911CE86}\Instance\{E1F1A0B8-BEEE-490D-BA7C-066C40B5E2B9}` を開く。
-3. **所有者の変更:**
-    * キーを右クリック → [アクセス許可] → [詳細設定]。
-    * 所有者を `Administrators` に変更する。
-4. **アクセス許可の変更:**
-    * 継承元が存在する場合 [継承の無効化] を行い、親キーからの設定を切り離す。
-    * `Administrators` に「フルコントロール」を付与する。
-5. **メリット値の書き換え:**
-    * バイナリ値 `FilterData` を編集し、メリット値を `00 00 00 00 00 00 00 00` 等に変更する。バイナリ構造はメリット値以外のものも含まれているため通常はツールを使用して変更する。
-6. **【推奨】権限を元に戻す（保護の復元）:**
-    * `Administrators` の権限を「読み取り」のみに戻す。
-    * 所有者を `NT Service\TrustedInstaller` に戻す。
-
-#### 結果確認
-
-* GraphStudioNext (32bit) 等で当該ファイルをレンダリングした際、Audio出力ピンがどこにも接続されていない（またはAudioピン自体生成されない）状態になれば成功。
-* LR2での再生時、カクつきがなくスムーズに開始されることを確認。
-
-## 4. 副作用と注意点
-
-* **他のアプリへの影響:** 「Microsoft DTV-DVD Audio Decoder」を無効化すると、Windows Media Playerや「映画＆テレビ」アプリ等で、MPEG-2音声やAAC音声が再生できなくなる可能性がある。
-* **LAV Filtersとの兼ね合い:** LAV Audio Decoderがインストールされている場合、そちらに接続されてしまうとカクつきが再発する可能性がある。その場合はLAV側でも当該フォーマット（AAC等）を無効化する必要がある。
+* Note: If permission error occurs, manipulate registry permissions with following steps.
 
 ---
 
-## [2026-02-10] 5. 実装された解決策：LR2 BGA Null Audio Renderer
+#### [Optional] Step 3: TrustedInstaller Permission Handling Procedure
 
-上記の方法A・Bに加え、本プロジェクトでは**方法C**として、専用のDirectShowフィルターを実装した。
+Windows standard filters are strongly protected, so operation in following order is required.
 
-### 方法C：LR2 BGA Null Audio Renderer（推奨・自動解決）
+1. **Open Registry Editor**: Open `regedit` with Admin rights.
+2. **Go to Key**: Open `HKEY_LOCAL_MACHINE\SOFTWARE\WOW6432Node\Classes\CLSID\{083863F1-70DE-11D0-BD40-00A0C911CE86}\Instance\{E1F1A0B8-BEEE-490D-BA7C-066C40B5E2B9}`.
+3. **Change Owner**:
+    * Right click key -> [Permissions] -> [Advanced].
+    * Change owner to `Administrators`.
+4. **Change Permissions**:
+    * If inheritance exists, [Disable Inheritance] and disconnect settings from parent key.
+    * Grant "Full Control" to `Administrators`.
+5. **Rewrite Merit Value**:
+    * Edit binary value `FilterData`, change merit value part to `00 00 00 00 00 00 00 00` etc. Binary structure contains things other than merit value so usually use tool to change.
+6. **[Recommended] Restore Permissions (Restore Protection)**:
+    * Revert `Administrators` permission to "Read" only.
+    * Revert owner to `NT Service\TrustedInstaller`.
 
-`LR2BGAFilter.ax` に同梱される「**LR2 BGA Null Audio Renderer**」は、音声ストリームを即座に破棄するNull Rendererである。
+#### Result Confirmation
 
-#### 技術仕様
+* When rendering file with GraphStudioNext (32bit) etc., successful if Audio output pin is not connected anywhere (or Audio pin itself is not generated).
+* Confirm playback starts smoothly without stutter in LR2.
 
-| 項目           | 詳細                                     |
-| -------------- | ---------------------------------------- |
-| **フィルタ名** | LR2 BGA Null Audio Renderer              |
-| **CLSID**      | `{64878B0F-CC73-484F-9B7B-47520B40C8F0}` |
-| **継承元**     | `CBaseRenderer` (DirectShow BaseClasses) |
-| **入力**       | `MEDIATYPE_Audio` (全サブタイプ対応)     |
-| **Merit**      | `0xfff00000` (最高優先度)                |
+## 4. Side Effects and Notes
 
-#### 動作原理
+* **Impact on other apps**: Disabling "Microsoft DTV-DVD Audio Decoder" might disable playback of MPEG-2 Audio or AAC Audio in Windows Media Player or "Movies & TV" app.
+* **Relation with LAV Filters**: If LAV Audio Decoder is installed, if connected there, stutter might recur. In that case, need to disable format (AAC etc.) in LAV side too.
 
-1. **自動接続**: Merit値が最高優先度のため、BGAファイルに音声トラックが存在すると自動的に接続される。
-2. **即時破棄**: `DoRenderSample()` でサンプルを即座に破棄する。
-3. **待機なし**: `ShouldDrawSampleNow()` で常に `S_OK` を返し、プレゼンテーション時刻を待たない。
+---
 
-これにより、音声レンダラーがマスタークロックとなっても、データ待機によるクロック遅延が発生しない。
+## [2026-02-10] 5. Implemented Solution: LR2 BGA Null Audio Renderer
 
-#### メリット
+In addition to Method A/B, this project implemented **Method C** as a dedicated DirectShow filter.
 
-* **環境変更不要**: レジストリ操作やシステムフィルタの無効化が不要。
-* **他アプリへの影響なし**: LR2 BGA Filter登録時のみ有効。
-* **自動適用**: ユーザー操作なしで問題のあるBGAに自動対応。
+### Method C: LR2 BGA Null Audio Renderer (Recommended / Auto Solution)
 
-#### 使用方法
+"**LR2 BGA Null Audio Renderer**" bundled with `LR2BGAFilter.ax` is a Null Renderer that immediately discards audio stream.
 
-~~`LR2BGAFilter.ax` を `regsvr32` で登録するだけで有効になる。~~
+#### Technical Specifications
 
-インストーラーを作成したので、そちらを使用してください。
+| Item            | Details                                  |
+| :-------------- | :--------------------------------------- |
+| **Filter Name** | LR2 BGA Null Audio Renderer              |
+| **CLSID**       | `{64878B0F-CC73-484F-9B7B-47520B40C8F0}` |
+| **Inherits**    | `CBaseRenderer` (DirectShow BaseClasses) |
+| **Input**       | `MEDIATYPE_Audio` (All subtypes)         |
+| **Merit**       | `0xfff00000` (Highest Priority)          |
+
+#### Operating Principle
+
+1. **Auto Connection**: Because Merit Value is Highest Priority, it automatically connects if audio track exists in BGA file.
+2. **Immediate Discard**: Immediately discard sample with `DoRenderSample()`.
+3. **No Wait**: Always return `S_OK` with `ShouldDrawSampleNow()`, not waiting for presentation time.
+
+Thereby, even if audio renderer becomes Master Clock, clock delay due to data wait does not occur.
+
+#### Merits
+
+* **No Environment Change**: No registry operation or system filter disabling required.
+* **No Impact on Other Apps**: Effective only when LR2 BGA Filter is registered.
+* **Auto Apply**: Automatically handles problematic BGAs without user operation.
+
+#### How to Use
+
+~~Just register `LR2BGAFilter.ax` with `regsvr32`.~~
+
+Please use the created installer.
 
 ```powershell
 regsvr32 LR2BGAFilter.ax
 ```
 
-GraphStudioNext等で確認すると、Audio出力ピンが「LR2 BGA Null Audio Renderer」に接続されていることが分かる。
+Confirm with GraphStudioNext etc. that Audio output pin is connected to "LR2 BGA Null Audio Renderer".
