@@ -1,0 +1,219 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <xsd:schema id="root" xmlns="" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
+    <xsd:import namespace="http://www.w3.org/XML/1998/namespace" />
+    <xsd:element name="root" msdata:IsDataSet="true">
+      <xsd:complexType>
+        <xsd:choice maxOccurs="unbounded">
+          <xsd:element name="data">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+                <xsd:element name="comment" type="xsd:string" minOccurs="0" msdata:Ordinal="2" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" use="required" msdata:Ordinal="1" />
+              <xsd:attribute name="type" type="xsd:string" msdata:Ordinal="3" />
+              <xsd:attribute name="mimetype" type="xsd:string" msdata:Ordinal="4" />
+              <xsd:attribute ref="xml:space" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="resheader">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" use="required" />
+            </xsd:complexType>
+          </xsd:element>
+        </xsd:choice>
+      </xsd:complexType>
+    </xsd:element>
+  </xsd:schema>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=null</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=null</value>
+  </resheader>
+  <data name="Title_Install" xml:space="preserve">
+    <value>LR2 BGA Filter Installer</value>
+  </data>
+  <data name="Title_Uninstall" xml:space="preserve">
+    <value>LR2 BGA Filter Uninstaller</value>
+  </data>
+  <data name="Log_InstallerStarted" xml:space="preserve">
+    <value>Installer started.</value>
+  </data>
+  <data name="Log_UninstallerStarted" xml:space="preserve">
+    <value>Uninstaller started.</value>
+  </data>
+  <data name="Error_AdminRequired" xml:space="preserve">
+    <value>Error: Administrator privileges required.</value>
+  </data>
+  <data name="Msg_AdminRequired" xml:space="preserve">
+    <value>Administrator privileges are required to run this application.</value>
+  </data>
+  <data name="Check_Agree" xml:space="preserve">
+    <value>I agree to modify registry settings.</value>
+  </data>
+  <data name="Warning_Install" xml:space="preserve">
+    <value>* The following changes will be made during installation (can be restored during uninstallation):
+- Change LAV Filters Merit values (priority)
+- Change DirectShow Preferred Filters settings</value>
+  </data>
+  <data name="Button_Install" xml:space="preserve">
+    <value>Install</value>
+  </data>
+  <data name="Log_StartInstall" xml:space="preserve">
+    <value>To start installation, accept the changes and click 'Install'.</value>
+  </data>
+  <data name="Log_CheckLav" xml:space="preserve">
+    <value>Checking for LAV Filters (x86)...</value>
+  </data>
+  <data name="Error_LavNotFound" xml:space="preserve">
+    <value>[Error] {0} not found.</value>
+  </data>
+  <data name="Msg_LavNotFound_Body" xml:space="preserve">
+    <value>LAV Filters (x86) not found.
+Missing component: {0}</value>
+  </data>
+  <data name="Msg_LavNotFound_Body2" xml:space="preserve">
+    <value>LAV Filters (x86) not found.
+Please install LAVFilters (x86) and run again.</value>
+  </data>
+  <data name="Log_LavFound" xml:space="preserve">
+    <value>LAV Filters (x86) found.</value>
+  </data>
+  <data name="Log_CheckAx" xml:space="preserve">
+    <value>Checking for LR2BGAFilter.ax...</value>
+  </data>
+  <data name="Log_AxFound" xml:space="preserve">
+    <value>LR2BGAFilter.ax found: {0}</value>
+  </data>
+  <data name="Error_AxNotFound" xml:space="preserve">
+    <value>[Error] LR2BGAFilter.ax not found.</value>
+  </data>
+  <data name="Msg_AxNotFound_Body" xml:space="preserve">
+    <value>LR2BGAFilter.ax not found.
+Please place it in the same folder as the installer.</value>
+  </data>
+  <data name="Log_SearchPath" xml:space="preserve">
+    <value>Search path: {0}</value>
+  </data>
+  <data name="Log_InstallBegin" xml:space="preserve">
+    <value>[Installation Started]</value>
+  </data>
+  <data name="Log_BackupLav" xml:space="preserve">
+    <value>Backing up LAV settings...</value>
+  </data>
+  <data name="Log_ModifyLav" xml:space="preserve">
+    <value>Modifying LAV Merit values...</value>
+  </data>
+  <data name="Log_UpdateMerit" xml:space="preserve">
+    <value>Updated Merit for {0}</value>
+  </data>
+  <data name="Log_TakeOwnership" xml:space="preserve">
+    <value>Taking ownership of Preferred key...</value>
+  </data>
+  <data name="Warning_TakeOwnershipFailed" xml:space="preserve">
+    <value>[Warning] Failed to take ownership: {0}</value>
+  </data>
+  <data name="Log_BackupPreferred" xml:space="preserve">
+    <value>Backing up Preferred Filter settings...</value>
+  </data>
+  <data name="Log_UpdatePreferred" xml:space="preserve">
+    <value>Updating Preferred Filters...</value>
+  </data>
+  <data name="Log_RestoreOwnership" xml:space="preserve">
+    <value>Restoring ownership to TrustedInstaller...</value>
+  </data>
+  <data name="Warning_RestoreOwnershipFailed" xml:space="preserve">
+    <value>[Warning] Failed to restore ownership: {0}</value>
+  </data>
+  <data name="Log_RegisterAx" xml:space="preserve">
+    <value>Registering LR2BGAFilter.ax...</value>
+  </data>
+  <data name="Log_RegisterSuccess" xml:space="preserve">
+    <value>Filter Registered Successfully.</value>
+  </data>
+  <data name="Error_RegisterFailed" xml:space="preserve">
+    <value>[Error] Failed to register filter logic.</value>
+  </data>
+  <data name="Msg_InstallComplete" xml:space="preserve">
+    <value>Installation completed.
+A restart is recommended.</value>
+  </data>
+  <data name="Title_Complete" xml:space="preserve">
+    <value>Complete</value>
+  </data>
+  <data name="Label_BackupStatus" xml:space="preserve">
+    <value>Checking backup status...</value>
+  </data>
+  <data name="Check_RestoreLav" xml:space="preserve">
+    <value>Restore LAV Filters settings</value>
+  </data>
+  <data name="Check_RestorePreferred" xml:space="preserve">
+    <value>Restore Preferred Filters settings</value>
+  </data>
+  <data name="Check_DeleteUser" xml:space="preserve">
+    <value>Delete LR2 BGA Filter settings (HKCU)</value>
+  </data>
+  <data name="Button_Uninstall" xml:space="preserve">
+    <value>Uninstall</value>
+  </data>
+  <data name="Log_ShowBackupStatus" xml:space="preserve">
+    <value>Backup: LAV={0}, Preferred={1}</value>
+  </data>
+  <data name="Status_Exists" xml:space="preserve">
+    <value>Found</value>
+  </data>
+  <data name="Status_NotExists" xml:space="preserve">
+    <value>Not Found</value>
+  </data>
+  <data name="Log_UninstallBegin" xml:space="preserve">
+    <value>[Uninstallation Started]</value>
+  </data>
+  <data name="Log_RestoreLav" xml:space="preserve">
+    <value>Restored {0} settings.</value>
+  </data>
+  <data name="Log_CleanupPreferred" xml:space="preserve">
+    <value>Cleaning up current Preferred settings...</value>
+  </data>
+  <data name="Log_RestorePreferred" xml:space="preserve">
+    <value>Restored Preferred settings.</value>
+  </data>
+  <data name="Log_RestoreOwnershipTrusted" xml:space="preserve">
+    <value>Restored ownership to TrustedInstaller.</value>
+  </data>
+  <data name="Log_UnregisterAx" xml:space="preserve">
+    <value>Unregistering LR2BGAFilter.ax...</value>
+  </data>
+  <data name="Log_UnregisterSuccess" xml:space="preserve">
+    <value>Filter Unregistered Successfully.</value>
+  </data>
+  <data name="Log_DeleteUser" xml:space="preserve">
+    <value>Deleted user settings.</value>
+  </data>
+  <data name="Warning_DeleteUserFailed" xml:space="preserve">
+    <value>[Warning] Failed to delete user settings: {0}</value>
+  </data>
+  <data name="Msg_UninstallComplete" xml:space="preserve">
+    <value>Uninstallation completed.</value>
+  </data>
+  <data name="Button_Exit" xml:space="preserve">
+    <value>Exit</value>
+  </data>
+  <data name="Log_Complete" xml:space="preserve">
+    <value>[All operations completed. Please click the Exit button to close.]</value>
+  </data>
+  <data name="Msg_Error" xml:space="preserve">
+    <value>Error</value>
+  </data>
+  <data name="Error_Unexpected" xml:space="preserve">
+    <value>An unexpected error occurred:
+{0}</value>
+  </data>
+</root>

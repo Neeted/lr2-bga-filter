@@ -1,0 +1,219 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <xsd:schema id="root" xmlns="" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
+    <xsd:import namespace="http://www.w3.org/XML/1998/namespace" />
+    <xsd:element name="root" msdata:IsDataSet="true">
+      <xsd:complexType>
+        <xsd:choice maxOccurs="unbounded">
+          <xsd:element name="data">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+                <xsd:element name="comment" type="xsd:string" minOccurs="0" msdata:Ordinal="2" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" use="required" msdata:Ordinal="1" />
+              <xsd:attribute name="type" type="xsd:string" msdata:Ordinal="3" />
+              <xsd:attribute name="mimetype" type="xsd:string" msdata:Ordinal="4" />
+              <xsd:attribute ref="xml:space" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="resheader">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" use="required" />
+            </xsd:complexType>
+          </xsd:element>
+        </xsd:choice>
+      </xsd:complexType>
+    </xsd:element>
+  </xsd:schema>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=null</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=null</value>
+  </resheader>
+  <data name="Title_Install" xml:space="preserve">
+    <value>LR2 BGA Filter 설치</value>
+  </data>
+  <data name="Title_Uninstall" xml:space="preserve">
+    <value>LR2 BGA Filter 제거</value>
+  </data>
+  <data name="Log_InstallerStarted" xml:space="preserve">
+    <value>설치 프로그램을 시작했습니다.</value>
+  </data>
+  <data name="Log_UninstallerStarted" xml:space="preserve">
+    <value>제거 프로그램을 시작했습니다.</value>
+  </data>
+  <data name="Error_AdminRequired" xml:space="preserve">
+    <value>오류: 관리자 권한이 필요합니다.</value>
+  </data>
+  <data name="Msg_AdminRequired" xml:space="preserve">
+    <value>이 응용 프로그램을 실행하려면 관리자 권한이 필요합니다.</value>
+  </data>
+  <data name="Check_Agree" xml:space="preserve">
+    <value>레지스트리 설정 변경에 동의합니다</value>
+  </data>
+  <data name="Warning_Install" xml:space="preserve">
+    <value>※ 설치 시 다음 사항이 변경됩니다 (제거 시 복원 가능):
+- LAV Filters 장점 값(우선 순위) 변경
+- DirectShow Preferred Filters (최우선 필터) 설정 변경</value>
+  </data>
+  <data name="Button_Install" xml:space="preserve">
+    <value>설치</value>
+  </data>
+  <data name="Log_StartInstall" xml:space="preserve">
+    <value>설치를 시작하려면 변경 사항에 동의하고 '설치'를 클릭하십시오.</value>
+  </data>
+  <data name="Log_CheckLav" xml:space="preserve">
+    <value>LAV Filters (x86) 확인 중...</value>
+  </data>
+  <data name="Error_LavNotFound" xml:space="preserve">
+    <value>[오류] {0} 을(를) 찾을 수 없습니다.</value>
+  </data>
+  <data name="Msg_LavNotFound_Body" xml:space="preserve">
+    <value>LAV Filters (x86) 을(를) 찾을 수 없습니다.
+누락된 구성 요소: {0}</value>
+  </data>
+  <data name="Msg_LavNotFound_Body2" xml:space="preserve">
+    <value>LAV Filters (x86) 을(를) 찾을 수 없습니다.
+LAVFilters (x86) 를 설치하고 다시 실행하십시오.</value>
+  </data>
+  <data name="Log_LavFound" xml:space="preserve">
+    <value>LAV Filters (x86) 가 확인되었습니다.</value>
+  </data>
+  <data name="Log_CheckAx" xml:space="preserve">
+    <value>LR2BGAFilter.ax 확인 중...</value>
+  </data>
+  <data name="Log_AxFound" xml:space="preserve">
+    <value>LR2BGAFilter.ax 가 확인되었습니다: {0}</value>
+  </data>
+  <data name="Error_AxNotFound" xml:space="preserve">
+    <value>[오류] LR2BGAFilter.ax 을(를) 찾을 수 없습니다.</value>
+  </data>
+  <data name="Msg_AxNotFound_Body" xml:space="preserve">
+    <value>LR2BGAFilter.ax 을(를) 찾을 수 없습니다.
+설치 프로그램과 같은 폴더에 배치하십시오.</value>
+  </data>
+  <data name="Log_SearchPath" xml:space="preserve">
+    <value>검색 경로: {0}</value>
+  </data>
+  <data name="Log_InstallBegin" xml:space="preserve">
+    <value>[설치 시작]</value>
+  </data>
+  <data name="Log_BackupLav" xml:space="preserve">
+    <value>Backing up LAV settings...</value>
+  </data>
+  <data name="Log_ModifyLav" xml:space="preserve">
+    <value>Modifying LAV Merit values...</value>
+  </data>
+  <data name="Log_UpdateMerit" xml:space="preserve">
+    <value>Updated Merit for {0}</value>
+  </data>
+  <data name="Log_TakeOwnership" xml:space="preserve">
+    <value>Taking ownership of Preferred key...</value>
+  </data>
+  <data name="Warning_TakeOwnershipFailed" xml:space="preserve">
+    <value>[경고] Failed to take ownership: {0}</value>
+  </data>
+  <data name="Log_BackupPreferred" xml:space="preserve">
+    <value>Backing up Preferred Filter settings...</value>
+  </data>
+  <data name="Log_UpdatePreferred" xml:space="preserve">
+    <value>Updating Preferred Filters...</value>
+  </data>
+  <data name="Log_RestoreOwnership" xml:space="preserve">
+    <value>Restoring ownership to TrustedInstaller...</value>
+  </data>
+  <data name="Warning_RestoreOwnershipFailed" xml:space="preserve">
+    <value>[경고] Failed to restore ownership: {0}</value>
+  </data>
+  <data name="Log_RegisterAx" xml:space="preserve">
+    <value>Registering LR2BGAFilter.ax...</value>
+  </data>
+  <data name="Log_RegisterSuccess" xml:space="preserve">
+    <value>Filter Registered Successfully.</value>
+  </data>
+  <data name="Error_RegisterFailed" xml:space="preserve">
+    <value>[오류] Failed to register filter logic.</value>
+  </data>
+  <data name="Msg_InstallComplete" xml:space="preserve">
+    <value>설치가 완료되었습니다.
+재부팅을 권장합니다.</value>
+  </data>
+  <data name="Title_Complete" xml:space="preserve">
+    <value>완료</value>
+  </data>
+  <data name="Label_BackupStatus" xml:space="preserve">
+    <value>백업 상태 확인 중...</value>
+  </data>
+  <data name="Check_RestoreLav" xml:space="preserve">
+    <value>LAV Filters 설정을 원래대로 되돌리기</value>
+  </data>
+  <data name="Check_RestorePreferred" xml:space="preserve">
+    <value>Preferred Filters 설정을 원래대로 되돌리기</value>
+  </data>
+  <data name="Check_DeleteUser" xml:space="preserve">
+    <value>LR2 BGA Filter 설정(HKCU) 삭제하기</value>
+  </data>
+  <data name="Button_Uninstall" xml:space="preserve">
+    <value>제거</value>
+  </data>
+  <data name="Log_ShowBackupStatus" xml:space="preserve">
+    <value>백업: LAV={0}, Preferred={1}</value>
+  </data>
+  <data name="Status_Exists" xml:space="preserve">
+    <value>있음</value>
+  </data>
+  <data name="Status_NotExists" xml:space="preserve">
+    <value>없음</value>
+  </data>
+  <data name="Log_UninstallBegin" xml:space="preserve">
+    <value>[제거 시작]</value>
+  </data>
+  <data name="Log_RestoreLav" xml:space="preserve">
+    <value>Restored {0} settings.</value>
+  </data>
+  <data name="Log_CleanupPreferred" xml:space="preserve">
+    <value>Cleaning up current Preferred settings...</value>
+  </data>
+  <data name="Log_RestorePreferred" xml:space="preserve">
+    <value>Restored Preferred settings.</value>
+  </data>
+  <data name="Log_RestoreOwnershipTrusted" xml:space="preserve">
+    <value>Restored ownership to TrustedInstaller.</value>
+  </data>
+  <data name="Log_UnregisterAx" xml:space="preserve">
+    <value>Unregistering LR2BGAFilter.ax...</value>
+  </data>
+  <data name="Log_UnregisterSuccess" xml:space="preserve">
+    <value>Filter Unregistered Successfully.</value>
+  </data>
+  <data name="Log_DeleteUser" xml:space="preserve">
+    <value>Deleted user settings.</value>
+  </data>
+  <data name="Warning_DeleteUserFailed" xml:space="preserve">
+    <value>[경고] Failed to delete user settings: {0}</value>
+  </data>
+  <data name="Msg_UninstallComplete" xml:space="preserve">
+    <value>제거가 완료되었습니다.</value>
+  </data>
+  <data name="Button_Exit" xml:space="preserve">
+    <value>종료</value>
+  </data>
+  <data name="Log_Complete" xml:space="preserve">
+    <value>[모든 작업이 완료되었습니다. 종료 버튼을 눌러 닫으십시오.]</value>
+  </data>
+  <data name="Msg_Error" xml:space="preserve">
+    <value>오류</value>
+  </data>
+  <data name="Error_Unexpected" xml:space="preserve">
+    <value>예기치 않은 오류가 발생했습니다:
+{0}</value>
+  </data>
+</root>

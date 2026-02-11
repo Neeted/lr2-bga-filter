@@ -1,317 +1,41 @@
 using System;
-using System.Collections.Generic;
-using System.IO;
 using System.Security.Principal;
 using System.Windows.Forms;
-using Microsoft.Win32;
 
 namespace Installer
 {
-    class Program
+    static class Program
     {
-        // 定数
-        const string DIRECTSHOW_FILTER_CLSID_INSTANCE = @"SOFTWARE\Classes\WOW6432Node\CLSID\{083863F1-70DE-11D0-BD40-00A0C911CE86}\Instance";
-        const string PREFERRED_FILTERS_KEY = @"SOFTWARE\WOW6432Node\Microsoft\DirectShow\Preferred";
-
-        // LAV Filter GUIDs
-        static readonly Dictionary<string, string> LavFilterGuids = new Dictionary<string, string>
-        {
-            { "{171252A0-8820-4AFE-9DF8-5C92B2D66B04}", "LAV Splitter" },
-            { "{B98D13E7-55DB-4385-A33D-09FD1BA26338}", "LAV Splitter Source" },
-            { "{EE30215D-164F-4A92-A4EB-9D4C13390F9F}", "LAV Video Decoder" }
-        };
-
-        // Merit Values
-        const int MERIT_LAV_SPLITTER = unchecked((int)0xff800004);
-        const int MERIT_LAV_VIDEO = unchecked((int)0xff800003);
-
-        // Preferred Filters Definitions
-        static readonly Dictionary<string, string> PreferredFilterSettings = new Dictionary<string, string>
-        {
-            // Windows Media Video 9 Image v2 (WMVR) -> LAV Video Decoder
-            { "{52564D57-0000-0010-8000-00AA00389B71}", "{EE30215D-164F-4A92-A4EB-9D4C13390F9F}" },
-            // WMV1 / WMV2 / WMV3 -> LAV Video Decoder
-            { "{41564D57-0000-0010-8000-00AA00389B71}", "{EE30215D-164F-4A92-A4EB-9D4C13390F9F}" }, // WMV3 (Actual reg key might vary, using specs)
-            { "{31564D57-0000-0010-8000-00AA00389B71}", "{EE30215D-164F-4A92-A4EB-9D4C13390F9F}" }, // WMV1
-            { "{32564D57-0000-0010-8000-00AA00389B71}", "{EE30215D-164F-4A92-A4EB-9D4C13390F9F}" }, // WMV2
-            { "{33564D57-0000-0010-8000-00AA00389B71}", "{EE30215D-164F-4A92-A4EB-9D4C13390F9F}" }, // WMV3
-            
-            // Format -> USE MERIT (Dummy GUID)
-            { "{31637661-0000-0010-8000-00AA00389B71}", "{ABCD1234-0000-0000-0000-000000000000}" }, // avc1
-            { "{31435641-0000-0010-8000-00AA00389B71}", "{ABCD1234-0000-0000-0000-000000000000}" }, // AVC1
-            { "{78766964-0000-0010-8000-00AA00389B71}", "{ABCD1234-0000-0000-0000-000000000000}" }, // divx
-            { "{58564944-0000-0010-8000-00AA00389B71}", "{ABCD1234-0000-0000-0000-000000000000}" }, // DIVX
-            { "{34363268-0000-0010-8000-00AA00389B71}", "{ABCD1234-0000-0000-0000-000000000000}" }, // h264
-            { "{34363248-0000-0010-8000-00AA00389B71}", "{ABCD1234-0000-0000-0000-000000000000}" }, // H264
-            { "{43564548-0000-0010-8000-00AA00389B71}", "{ABCD1234-0000-0000-0000-000000000000}" }, // HEVC
-            { "{31435648-0000-0010-8000-00AA00389B71}", "{ABCD1234-0000-0000-0000-000000000000}" }, // HVC1
-            // MJPG
-            { "{3467706D-0000-0010-8000-00AA00389B71}", "{ABCD1234-0000-0000-0000-000000000000}" }, // mpg4 (check GUIDs carefully)
-            { "{3447504D-0000-0010-8000-00AA00389B71}", "{ABCD1234-0000-0000-0000-000000000000}" }, // MPG4
-            { "{47504A4D-0000-0010-8000-00AA00389B71}", "{ABCD1234-0000-0000-0000-000000000000}" }, // MJPG
-            
-            // MPEG-1/2
-            { "{e436eb80-524f-11ce-9f53-0020af0ba770}", "{ABCD1234-0000-0000-0000-000000000000}" }, // MPEG-1 Payload? (Check specs)
-            { "{e06d8026-db46-11cf-b4d1-00805f6cbbea}", "{ABCD1234-0000-0000-0000-000000000000}" }, // MPEG2_VIDEO
-            // MPEG-4
-            { "{7634706D-0000-0010-8000-00AA00389B71}", "{ABCD1234-0000-0000-0000-000000000000}" }, // mp4v
-            { "{5634504D-0000-0010-8000-00AA00389B71}", "{ABCD1234-0000-0000-0000-000000000000}" }, // MP4V
-            { "{7334706D-0000-0010-8000-00AA00389B71}", "{ABCD1234-0000-0000-0000-000000000000}" }, // mp4s
-            { "{5334504D-0000-0010-8000-00AA00389B71}", "{ABCD1234-0000-0000-0000-000000000000}" }, // MP4S
-            // Others mentioned in spec
-            { "{e436eb81-524f-11ce-9f53-0020af0ba770}", "{ABCD1234-0000-0000-0000-000000000000}" }, // MPEG1_Payload
-            { "{64737664-0000-0010-8000-00AA00389B71}", "{ABCD1234-0000-0000-0000-000000000000}" }, // sd-dvcr
-            { "{30357864-0000-0010-8000-00AA00389B71}", "{ABCD1234-0000-0000-0000-000000000000}" }, // dx50
-            { "{30355844-0000-0010-8000-00AA00389B71}", "{ABCD1234-0000-0000-0000-000000000000}" }, // DX50
-            { "{35363248-0000-0010-8000-00AA00389B71}", "{ABCD1234-0000-0000-0000-000000000000}" }, // H265
-            { "{31435657-0000-0010-8000-00AA00389B71}", "{ABCD1234-0000-0000-0000-000000000000}" }, // WVC1
-            // XviD
-            { "{64697678-0000-0010-8000-00AA00389B71}", "{ABCD1234-0000-0000-0000-000000000000}" }, // xvid
-            { "{44495658-0000-0010-8000-00AA00389B71}", "{ABCD1234-0000-0000-0000-000000000000}" }, // XVID
-        };
-
+        /// <summary>
+        /// アプリケーションのメイン エントリ ポイントです。
+        /// </summary>
         [STAThread]
         static void Main(string[] args)
         {
-            if (!IsAdministrator())
+            if (args != null && args.Length > 0)
             {
-                MessageBox.Show("このアプリケーションを実行するには管理者権限が必要です。", "エラー", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                return;
-            }
-
-            Console.WriteLine("LR2 BGA Filter Installer / Uninstaller");
-            Console.WriteLine("======================================");
-
-            // 簡易的な対話モード
-            if (args.Length == 0)
-            {
-                Console.WriteLine("1. Install");
-                Console.WriteLine("2. Uninstall");
-                Console.WriteLine("q. Quit");
-                Console.Write("Choice: ");
-                var key = Console.ReadKey();
-                Console.WriteLine();
-
-                if (key.KeyChar == '1') PerformInstall();
-                else if (key.KeyChar == '2') PerformUninstall();
-                else return;
-            }
-            else
-            {
-                if (args[0].ToLower() == "/install") PerformInstall();
-                else if (args[0].ToLower() == "/uninstall") PerformUninstall();
-            }
-
-            Console.WriteLine("Press any key to exit...");
-            Console.ReadKey();
-        }
-
-        static void PerformInstall()
-        {
-            Console.WriteLine("\n[Install Started]");
-
-            // 0. Check for existing installation to prevent overwriting backups
-            const string LR2_BGA_FILTER_CLSID = "{61E38596-D44C-4097-89AF-AABBA85DAA6D}";
-            if (RegistryHelper.RegistryKeyExists($@"{DIRECTSHOW_FILTER_CLSID_INSTANCE}\{LR2_BGA_FILTER_CLSID}"))
-            {
-                MessageBox.Show("LR2 BGA Filter は既にインストールされています。\n二重インストールを防ぐため処理を中止します。\n再インストールが必要な場合は、一度アンインストールを行ってください。", "警告", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                return;
-            }
-
-            // 1. LAV Check
-            Console.WriteLine("Checking LAV Filters...");
-            foreach (var kvp in LavFilterGuids)
-            {
-                string keyPath = $@"{DIRECTSHOW_FILTER_CLSID_INSTANCE}\{kvp.Key}";
-                if (!RegistryHelper.RegistryKeyExists(keyPath))
+                foreach (var arg in args)
                 {
-                    MessageBox.Show($"LAV Filters (x86) が見つかりません。\n不足コンポーネント: {kvp.Value}\n\nLAVFilters (x86) をインストールしてください。", "エラー", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                    return;
-                }
-            }
-
-            // 2. Modify LAV Merit
-            if (MessageBox.Show("LR2 BGA Filter用にLAV Video Decoder等のメリット値を変更します。\nこれよりレジストリ操作を行います。", "確認", MessageBoxButtons.OKCancel, MessageBoxIcon.Warning) != DialogResult.OK) return;
-
-            Console.WriteLine("Backing up LAV settings...");
-            foreach (var kvp in LavFilterGuids)
-            {
-                string keyPath = $@"{DIRECTSHOW_FILTER_CLSID_INSTANCE}\{kvp.Key}";
-                // Backup e.g. LAV_Splitter_backup.reg
-                string safeName = kvp.Value.Replace(" ", "_");
-                RegistryHelper.BackupRegistryKey("HKLM", keyPath, Path.GetFullPath($"{safeName}.reg"));
-            }
-
-            Console.WriteLine("Modifying LAV Merit values...");
-            foreach (var kvp in LavFilterGuids)
-            {
-                string keyPath = $@"{DIRECTSHOW_FILTER_CLSID_INSTANCE}\{kvp.Key}";
-                int merit = kvp.Value.Contains("Video") ? unchecked((int)MERIT_LAV_VIDEO) : unchecked((int)MERIT_LAV_SPLITTER);
-
-                // FilterDataバイナリの更新 (Offset 4-7)
-                var data = (byte[])RegistryHelper.GetRegistryValue(keyPath, "FilterData");
-                if (data != null && data.Length >= 8)
-                {
-                    byte[] meritBytes = BitConverter.GetBytes(merit); // Little Endian
-                    Array.Copy(meritBytes, 0, data, 4, 4);
-                    RegistryHelper.SetRegistryValue(keyPath, "FilterData", data, RegistryValueKind.Binary);
-                    Console.WriteLine($"Updated Merit for {kvp.Value}");
-                }
-            }
-
-            // 3. Preferred Filters
-            if (MessageBox.Show("Preferred Filter (優先フィルター) の設定を変更します。\n古い互換性プログラムなどで副作用が出る可能性があります。", "確認", MessageBoxButtons.OKCancel, MessageBoxIcon.Warning) != DialogResult.OK) return;
-
-            Console.WriteLine("Taking ownership of Preferred key...");
-            try
-            {
-                RegistryHelper.TakeOwnershipAndAllowAccess(PREFERRED_FILTERS_KEY);
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Warning: Failed to take ownership: {ex.Message}");
-            }
-
-            Console.WriteLine("Backing up Preferred Filter settings...");
-            RegistryHelper.BackupRegistryKey("HKLM", PREFERRED_FILTERS_KEY, Path.GetFullPath("Preferred_default.reg"));
-
-            Console.WriteLine("Updating Preferred Filters...");
-            foreach (var kvp in PreferredFilterSettings)
-            {
-                RegistryHelper.SetRegistryValue(PREFERRED_FILTERS_KEY, kvp.Key, kvp.Value, RegistryValueKind.String);
-            }
-
-            Console.WriteLine("Restoring ownership to TrustedInstaller...");
-            try
-            {
-                RegistryHelper.ReturnOwnershipToTrustedInstaller(PREFERRED_FILTERS_KEY);
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Warning: Failed to restore ownership: {ex.Message}");
-            }
-
-            // 4. Register AX
-            Console.WriteLine("Registering LR2BGAFilter.ax...");
-            string axPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..\\..\\LR2BGAFilter.ax");
-            if (!File.Exists(axPath)) axPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "LR2BGAFilter.ax"); // fallback
-
-            if (File.Exists(axPath))
-            {
-                if (FilterRegistrar.RegisterFilter(axPath))
-                    Console.WriteLine("Filter Registered Successfully.");
-                else
-                    Console.WriteLine("Error: Failed to register filter logic.");
-            }
-            else
-            {
-                Console.WriteLine($"Error: LR2BGAFilter.ax not found at {axPath}");
-            }
-
-            MessageBox.Show("インストールが完了しました。\nLAV Video Decoderの設定で Output Formats の RGB32 のみにチェックを入れてください。\n再起動を推奨します。", "完了", MessageBoxButtons.OK, MessageBoxIcon.Information);
-        }
-
-        static void PerformUninstall()
-        {
-            Console.WriteLine("\n[Uninstall Started]");
-
-            // 1. Restore LAV
-            bool restoredAny = false;
-            foreach (var kvp in LavFilterGuids)
-            {
-                string safeName = kvp.Value.Replace(" ", "_");
-                string backupFile = $"{safeName}.reg";
-                if (File.Exists(backupFile))
-                {
-                    if (!restoredAny)
+                    if (arg.StartsWith("/lang:", StringComparison.OrdinalIgnoreCase))
                     {
-                        if (MessageBox.Show("LAV Filtersの設定を元に戻しますか？", "確認", MessageBoxButtons.YesNo) != DialogResult.Yes)
+                        string lang = arg.Substring(6);
+                        try
                         {
-                            break;
+                            var culture = new System.Globalization.CultureInfo(lang);
+                            System.Threading.Thread.CurrentThread.CurrentCulture = culture;
+                            System.Threading.Thread.CurrentThread.CurrentUICulture = culture;
                         }
-                        restoredAny = true;
-                    }
-                    RegistryHelper.RestoreRegistryKey(Path.GetFullPath(backupFile));
-                    Console.WriteLine($"Restored {kvp.Value} settings.");
-                    try { File.Delete(backupFile); } catch { }
-                }
-            }
-
-            // 2. Restore Preferred
-            if (File.Exists("Preferred_default.reg"))
-            {
-                if (MessageBox.Show("Preferred Filtersの設定を元に戻しますか？", "確認", MessageBoxButtons.YesNo) == DialogResult.Yes)
-                {
-                    // Need ownership again likely
-                    try
-                    {
-                        RegistryHelper.TakeOwnershipAndAllowAccess(PREFERRED_FILTERS_KEY);
-                    }
-                    catch (Exception ex)
-                    {
-                        Console.WriteLine($"Warning: Failed to take ownership: {ex.Message}");
-                    }
-
-                    // Restore to backup state: Delete existing values first (to remove any added keys) then import
-                    Console.WriteLine("Cleaning up current Preferred settings...");
-                    RegistryHelper.DeleteAllRegistryValues(PREFERRED_FILTERS_KEY);
-
-                    RegistryHelper.RestoreRegistryKey(Path.GetFullPath("Preferred_default.reg"));
-                    Console.WriteLine("Restored Preferred settings.");
-
-                    // Restore ownership
-                    try
-                    {
-                        RegistryHelper.ReturnOwnershipToTrustedInstaller(PREFERRED_FILTERS_KEY);
-                        Console.WriteLine("Restored ownership to TrustedInstaller.");
-                    }
-                    catch (Exception ex)
-                    {
-                        Console.WriteLine($"Warning: Failed to restore ownership: {ex.Message}");
-                    }
-
-                    // Cleanup backup
-                    try { File.Delete("Preferred_default.reg"); } catch { }
-                }
-            }
-
-            // 3. Unregister AX
-            Console.WriteLine("Unregistering LR2BGAFilter.ax...");
-            string axPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..\\..\\LR2BGAFilter.ax");
-            if (!File.Exists(axPath)) axPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "LR2BGAFilter.ax");
-
-            if (File.Exists(axPath))
-            {
-                if (FilterRegistrar.UnregisterFilter(axPath))
-                    Console.WriteLine("Filter Unregistered Successfully.");
-            }
-
-            // 4. Cleanup HKCU Settings
-            const string USER_SETTINGS_KEY = @"SOFTWARE\LR2BGAFilter";
-            if (RegistryHelper.CurrentUserRegistryKeyExists(USER_SETTINGS_KEY))
-            {
-                if (MessageBox.Show($"フィルタの個別設定が保存されています。\n削除しますか？\n(場所: HKEY_CURRENT_USER\\{USER_SETTINGS_KEY})", "確認", MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes)
-                {
-                    try
-                    {
-                        RegistryHelper.DeleteCurrentUserSubKeyTree(USER_SETTINGS_KEY);
-                        Console.WriteLine("Deleted user settings.");
-                    }
-                    catch (Exception ex)
-                    {
-                        Console.WriteLine($"Warning: Failed to delete user settings: {ex.Message}");
+                        catch
+                        {
+                            // Ignore invalid culture
+                        }
                     }
                 }
             }
 
-            MessageBox.Show("アンインストールが完了しました。", "完了", MessageBoxButtons.OK, MessageBoxIcon.Information);
-        }
-
-        static bool IsAdministrator()
-        {
-            var identity = WindowsIdentity.GetCurrent();
-            var principal = new WindowsPrincipal(identity);
-            return principal.IsInRole(WindowsBuiltInRole.Administrator);
+            Application.EnableVisualStyles();
+            Application.SetCompatibleTextRenderingDefault(false);
+            Application.Run(new MainForm());
         }
     }
 }
