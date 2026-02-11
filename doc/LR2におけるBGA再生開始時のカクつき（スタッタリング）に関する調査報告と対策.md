@@ -166,7 +166,9 @@ Windows標準フィルタは強力な保護がかかっているため、以下�
 
 #### 使用方法
 
-`LR2BGAFilter.ax` を `regsvr32` で登録するだけで有効になる。
+~~`LR2BGAFilter.ax` を `regsvr32` で登録するだけで有効になる。~~
+
+インストーラーを作成したので、そちらを使用してください。
 
 ```powershell
 regsvr32 LR2BGAFilter.ax
