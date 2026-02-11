@@ -18,6 +18,9 @@ jobs:
     - name: Build C++ Filter
       run: msbuild LR2BGAFilter.sln /t:Rebuild /p:Configuration=Release /p:Platform=Win32 /v:m
 
+    - name: Restore NuGet Packages
+      run: dotnet restore tools/Installer/Installer.sln
+
     - name: Build C# Installer
       run: msbuild tools/Installer/Installer.sln /t:Rebuild /p:Configuration=Release /p:Platform="Any CPU" /v:m
 
