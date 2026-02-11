@@ -6,6 +6,8 @@
 
 DirectShow filter for LR2 (Lunatic Rave 2). Aims to improve BGA playback quality and performance.
 
+![header](docs/img/header.jpg)
+
 ## Features
 
 - **Proper handling of high-resolution videos**: Balances image quality and performance with appropriate downscaling.
@@ -23,7 +25,7 @@ To make this filter work properly, **LAVFilters** installation and the following
 
 1. **Install LAVFilters**
     - This filter assumes use with LAVFilters (LAV Splitter, LAV Video Decoder).
-    - [Download LAV Filters](https://github.com/nevcairiel/lavfilters/releases) Download `LAVFilters-*.**-Installer.exe`.
+    - [**Download LAV Filters**](https://github.com/nevcairiel/lavfilters/releases) Download `LAVFilters-*.**-Installer.exe`.
     - Install LAV Splitter (x86), LAV Video Decoder (x86). Others are unnecessary.
 
 2. **LAV Video Decoder Settings**
@@ -57,7 +59,7 @@ The release package consists of:
 
 As mentioned, LAV Filters installation and settings are required. Then install as follows:
 
-1. Download latest ZIP from [Releases].
+1. Download latest ZIP from [**Releases**](https://github.com/Neeted/lr2-bga-filter/releases).
 2. Extract to arbitrary folder. e.g. `C:\Bin\LR2BGAFilter`
 3. Run `Installer.exe`.
     - Tips: You can force language display with command line args `.\Installer.exe /lang:ja` `.\Installer.exe /lang:en` `.\Installer.exe /lang:ko`. Default is OS setting.
@@ -66,7 +68,7 @@ As mentioned, LAV Filters installation and settings are required. Then install a
 
 ## How to Configure
 
-Refer to [Configuration Guide](docs/en/LR2BGAFilterConfigurationTool.md) for details.
+Refer to [**Configuration Guide**](docs/en/LR2BGAFilterConfigurationTool.md) for details.
 
 1. Run `LR2BGAFilterConfigurationTool.bat`.
 2. Configure settings.

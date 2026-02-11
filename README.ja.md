@@ -6,6 +6,8 @@
 
 LR2 (Lunatic Rave 2) 用の DirectShow フィルターです。BGA の再生品質とパフォーマンスを改善することを目的としています。
 
+![header](docs/img/header.jpg)
+
 ## 特徴
 
 - **高解像度動画の適切な処理**: 適切なダウンスケーリングにより画質とパフォーマンスを両立します。
@@ -23,7 +25,7 @@ LR2 (Lunatic Rave 2) 用の DirectShow フィルターです。BGA の再生品�
 
 1. **LAVFilters のインストール**
     - 本フィルターは LAVFilters(LAV Splitter, LAV Video Decoder) と組み合わせて使用することを前提としています。
-    - [LAV Filtersのダウンロード](https://github.com/nevcairiel/lavfilters/releases) `LAVFilters-*.**-Installer.exe` をダウンロードしてください。
+    - [**LAV Filtersのダウンロード**](https://github.com/nevcairiel/lavfilters/releases) `LAVFilters-*.**-Installer.exe` をダウンロードしてください。
     - LAV Splitter (x86), LAV Video Decoder (x86) をインストールしてください。他は不要です。
 
 2. **LAV Video Decoder の設定**
@@ -57,7 +59,7 @@ DirectShow自体がレガシーな技術であり、現代の一般的な用途�
 
 前述の通り、LAV Filtersの導入と設定が必要です。その後、以下の手順でインストールします。
 
-1. [Releases] ページから最新の ZIP をダウンロードします。
+1. [**Releases**](https://github.com/Neeted/lr2-bga-filter/releases) ページから最新の ZIP をダウンロードします。
 2. 任意のフォルダに解凍します。`C:\Bin\LR2BGAFilter` など
 3. `Installer.exe` を実行します。
     - Tips: コマンドラインから `.\Installer.exe /lang:ja` `.\Installer.exe /lang:en` `.\Installer.exe /lang:ko` でそれぞれ日本語、英語、韓国語表示にできます。引数なしの場合はOSの言語設定を優先します。
@@ -66,7 +68,7 @@ DirectShow自体がレガシーな技術であり、現代の一般的な用途�
 
 ## 設定方法
 
-詳しい設定方法は[設定方法](docs/ja/LR2BGAFilterConfigurationTool.md)を参照してください。
+詳しい設定方法は[**設定方法**](docs/ja/LR2BGAFilterConfigurationTool.md)を参照してください。
 
 1. `LR2BGAFilterConfigurationTool.bat` を実行します。
 2. 各種設定を行います。
