@@ -205,7 +205,6 @@ void LR2BGAWindow::ShowExternalWindow()
 void LR2BGAWindow::CloseExternalWindow()
 {
     // ウィンドウを安全に閉じる処理
-    // ウィンドウを安全に閉じる処理
     if (m_hExtWnd && IsWindow(m_hExtWnd)) {
         // WM_CLOSE を送信してスレッドのメッセージループを終了させる
         PostMessage(m_hExtWnd, WM_CLOSE, 0, 0);
@@ -260,17 +259,31 @@ void LR2BGAWindow::UpdateExternalWindowPos()
     int y = cfg.y;
     int w = cfg.width;
     int h = cfg.height;
-    HWND hWndInsertAfter = cfg.topmost ? HWND_TOPMOST : HWND_NOTOPMOST;
-
-    UINT uFlags = SWP_NOACTIVATE | SWP_NOOWNERZORDER;
     
-    // パススルーモード有効時は設定画面のサイズ（Resize用）を無視する
-    // サイズは UpdateExternalWindow で実際の映像サイズに合わせて制御されるため
+    // Zオーダー適用順序の制御 (サンドイッチ/隠れ防止)
+    // HWND_BOTTOM は「最後に実行したものが最下層」になるため、
+    // Overlay > ExtWnd (Overlayが上) にしたい場合は、Overlayを先にBottomにしてから、ExtWndをBottomにする。
+    // HWND_TOPMOST は「最後に実行したものが最上位」になるため、
+    // Overlay > ExtWnd にしたい場合は、ExtWndを先にTopmostにしてから、OverlayをTopmostにする。
+    
+    UINT uFlags = SWP_NOACTIVATE | SWP_NOOWNERZORDER;
     if (cfg.passthrough) {
         uFlags |= SWP_NOSIZE;
     }
 
-    SetWindowPos(m_hExtWnd, hWndInsertAfter, x, y, w, h, uFlags);
+    if (cfg.topmost) {
+        // Topmostモード: ExtWnd -> Overlay の順
+        SetWindowPos(m_hExtWnd, HWND_TOPMOST, x, y, w, h, uFlags);
+        if (m_hOverlayWnd && IsWindow(m_hOverlayWnd)) {
+            SetWindowPos(m_hOverlayWnd, HWND_TOPMOST, x, y, w, h, uFlags);
+        }
+    } else {
+        // Bottomモード: Overlay -> ExtWnd の順 (ExtWndが最下層になる)
+        if (m_hOverlayWnd && IsWindow(m_hOverlayWnd)) {
+            SetWindowPos(m_hOverlayWnd, HWND_BOTTOM, x, y, w, h, uFlags);
+        }
+        SetWindowPos(m_hExtWnd, HWND_BOTTOM, x, y, w, h, uFlags);
+    }
 }
 
 // Helper for FocusLR2Window
@@ -388,15 +401,9 @@ LRESULT CALLBACK LR2BGAWindow::ExtWndProc(HWND hwnd, UINT uMsg, WPARAM wParam, L
             
         case WM_MOVE:
         case WM_SIZE:
-            if (pWindow->m_hOverlayWnd) {
-                // Sync Overlay
-                RECT rect;
-                GetWindowRect(hwnd, &rect);
-                SetWindowPos(pWindow->m_hOverlayWnd, NULL, 
-                    rect.left, rect.top, rect.right - rect.left, rect.bottom - rect.top, 
-                    SWP_NOZORDER | SWP_NOACTIVATE);
-            }
-            break; // Added break here to allow WM_WINDOWPOSCHANGED to be processed if it follows.
+             // WM_WINDOWPOSCHANGED で一括処理するためここでは何もしない、または無効化
+             // WS_POPUPに戻したため GetWindowRect (Screen Coords) が必要
+            break;
 
         case WM_WINDOWPOSCHANGED:
             {
@@ -406,12 +413,11 @@ LRESULT CALLBACK LR2BGAWindow::ExtWndProc(HWND hwnd, UINT uMsg, WPARAM wParam, L
                 pWindow->m_pSettings->m_extWindowY = rect.top;
                 pWindow->m_pSettings->Save(); // Sync save
                 
-                // Sync Overlay
+                // Sync Overlay (WS_POPUPに戻し、Zオーダーは変更しない)
                 if (pWindow->m_hOverlayWnd) {
-                     HWND hWndInsertAfter = pWindow->m_pSettings->m_extWindowTopmost ? HWND_TOPMOST : HWND_NOTOPMOST;
-                     SetWindowPos(pWindow->m_hOverlayWnd, hWndInsertAfter, 
+                     SetWindowPos(pWindow->m_hOverlayWnd, NULL, 
                         rect.left, rect.top, rect.right - rect.left, rect.bottom - rect.top, 
-                        SWP_NOACTIVATE | SWP_NOOWNERZORDER);
+                        SWP_NOACTIVATE | SWP_NOOWNERZORDER | SWP_NOZORDER);
                 }
             }
             return 0;
@@ -1038,9 +1044,9 @@ void LR2BGAWindow::ExtWindowThread()
         WS_EX_LAYERED | WS_EX_TRANSPARENT | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE,
         OVERLAY_WND_CLASS,
         L"LR2 BGA Overlay",
-        WS_POPUP,
-        0, 0, 100, 100, // ダミーサイズ（親ウィンドウ追従）
-        hwnd, // 親ウィンドウを外部ウィンドウに設定
+        WS_POPUP, // Revert to WS_POPUP for OBS capture support
+        0, 0, 100, 100,
+        hwnd, // Owner Window
         NULL, g_hInst, this);
 
     if (hwnd) {
