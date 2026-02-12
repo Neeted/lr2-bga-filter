@@ -1,5 +1,6 @@
 ﻿#include "LR2BGAImageProc.h"
 #include "LR2BGACPU.h"
+#include "LR2BGAThreadPool.h"
 
 //------------------------------------------------------------------------------
 // 定数定義 (Constants)
@@ -8,7 +9,7 @@ constexpr int kMaxBrightness = 255;             // 最大輝度値 (8bit)
 constexpr int kMaxBrightnessPercent = 100;      // 最大輝度 (%)
 
 // Static Initializations
-LR2BGAImageProc::ResizeFunc LR2BGAImageProc::pResizeNearest = LR2BGAImageProc::ResizeNearestNeighbor_Cpp;
+LR2BGAImageProc::ResizeFuncNearest LR2BGAImageProc::pResizeNearest = LR2BGAImageProc::ResizeNearestNeighbor_Cpp;
 LR2BGAImageProc::ResizeFunc LR2BGAImageProc::pResizeBilinear = LR2BGAImageProc::ResizeBilinear_Cpp;
 bool LR2BGAImageProc::m_initialized = false;
 
@@ -20,13 +21,15 @@ void LR2BGAImageProc::Initialize() {
     pResizeBilinear = ResizeBilinear_CppOpt;
 
     // Check CPU features and upgrade if possible
-    if (LR2BGACPU::IsAVX2Supported()) {
-        // pResizeNearest = ResizeNearestNeighbor_AVX2; // Future
-        // pResizeBilinear = ResizeBilinear_AVX2;       // Future
-    } 
-    else if (LR2BGACPU::IsSSE41Supported()) {
-        // pResizeNearest = ResizeNearestNeighbor_SSE41; // Future
+    if (LR2BGACPU::IsSSE41Supported()) {
+        // SSE4.1 is supported
+        // NearestNeighbor is already parallelized in CppOpt, no need for SIMD fallback
         pResizeBilinear = ResizeBilinear_SSE41;
+    }
+
+    if (LR2BGACPU::IsAVX2Supported()) {
+        // AVX2 is also supported
+        pResizeBilinear = ResizeBilinear_AVX2;
     }
 
     m_initialized = true;
@@ -37,7 +40,7 @@ void LR2BGAImageProc::Initialize() {
 //
 // 概要:
 //   フィルタ内で使用される画像処理アルゴリズムのコレクションです。
-//   実行環境のCPU機能（SSE4.1等）に応じて最適な実装を動的に選択します。
+//   実行環境のCPU機能（SSE4.1/AVX2等）に応じて最適な実装を選択、または並列化された標準実装を使用します。
 //
 // 機能:
 //   - リサイズ: 最近傍法 (Nearest Neighbor) および バイリニア法 (Bilinear)。
@@ -45,13 +48,13 @@ void LR2BGAImageProc::Initialize() {
 //   - 色変換/明るさ調整: ピクセル単位の操作。
 //
 // 実装の詳細:
-//   - CppOpt: 固定小数点演算とLUT（Look-Up Table）を使用した最適化版標準実装。
-//   - SSE4.1: SSE4.1命令セットを使用したSIMD実装（Bilinear対応）。
-//   - MultiThread: スレッドプールを使用した並列処理（Yループ分割）。
+//   - CppOpt: 固定小数点演算とLUT（Look-Up Table）を使用した最適化版標準実装（マルチスレッド対応）。
+//   - SSE4.1/AVX2: SIMD命令セットを使用した最適化実装（BilinearかつRGB32入力時に適用）。
+//   - MultiThread: スレッドプールを使用した並列処理（全実装で適用）。
 //
 // パフォーマンスノート:
-//   - CPUがSSE4.1をサポートしている場合、自動的にSIMD版が選択されます。
-//   - マルチスレッド化により、マルチコアCPUでの処理効率が最大化されます。
+//   - Nearest Neighborは常に並列化されたCppOpt実装が使用されます。
+//   - Bilinearは条件（RGB32入力かつ対応CPU）を満たせばSIMD版が、それ以外は並列化されたCppOpt版が使用されます。
 //   - バッファオーバーランを防ぐため、ストライドや境界チェックを厳密に行う必要があります。
 //-------------------------------------------------------------------------------
 
@@ -106,12 +109,11 @@ void LR2BGAImageProc::ResizeNearestNeighbor(
 {
     if (!m_initialized) Initialize();
     
-    // 関数ポインタのシグネチャ互換用ダミー
-    // NearestNeighbor系の実装は lutWeights を使用しないため空で問題ない
-    std::vector<short> dummyW;
+    // 関数ポインタのシグネチャ互換用ダミー不要
+    // NearestNeighbor系の実装は lutWeights を引数に持たない
     pResizeNearest(pSrc, srcWidth, srcHeight, srcStride, srcBpp, 
                    pDst, dstWidth, dstHeight, dstStride, dstBpp, 
-                   actualWidth, actualHeight, offsetX, offsetY, pSrcRect, lutIndices, dummyW);
+                   actualWidth, actualHeight, offsetX, offsetY, pSrcRect, lutIndices);
 }
 
 // ------------------------------------------------------------------------------
@@ -121,7 +123,7 @@ void LR2BGAImageProc::ResizeNearestNeighbor_Cpp(
     const BYTE* pSrc, int srcWidth, int srcHeight, int srcStride, int srcBpp,
     BYTE* pDst, int dstWidth, int dstHeight, int dstStride, int dstBpp,
     int actualWidth, int actualHeight, int offsetX, int offsetY, 
-    const RECT* pSrcRect, std::vector<int>& lutIndices, std::vector<short>& lutWeights)
+    const RECT* pSrcRect, std::vector<int>& lutIndices)
 {
     int srcBytes = srcBpp / 8;
     int dstBytes = dstBpp / 8;
@@ -259,7 +261,7 @@ void LR2BGAImageProc::ResizeNearestNeighbor_CppOpt(
     const BYTE* pSrc, int srcW, int srcH, int srcStride, int srcBpp,
     BYTE* pDst, int dstW, int dstH, int dstStride, int dstBpp,
     int actualW, int actualH, int offX, int offY,
-    const RECT* pSrcRect, std::vector<int>& lutIndices, std::vector<short>& lutWeights)
+    const RECT* pSrcRect, std::vector<int>& lutIndices)
 {
     int srcBytes = srcBpp / 8;
     int dstBytes = dstBpp / 8;
@@ -284,31 +286,34 @@ void LR2BGAImageProc::ResizeNearestNeighbor_CppOpt(
 
     float scaleY = (float)srcRectH / actualH;
 
-    for (int y = 0; y < actualH; y++) {
-        int dstY = y + offY;
-        if (dstY < 0 || dstY >= dstH) continue;
+    // Parallel execution
+    LR2BGAThreadPool::Instance().ParallelFor(0, actualH, [&](int startY, int endY) {
+        for (int y = startY; y < endY; y++) {
+            int dstY = y + offY;
+            if (dstY < 0 || dstY >= dstH) continue;
 
-        int srcY = rect.top + (int)(y * scaleY);
-        if (srcY >= rect.bottom) srcY = rect.bottom - 1;
+            int srcY = rect.top + (int)(y * scaleY);
+            if (srcY >= rect.bottom) srcY = rect.bottom - 1;
 
-        BYTE* pDstRow = pDst + dstY * dstStride;
-        const BYTE* pSrcRow = pSrc + srcY * srcStride;
+            BYTE* pDstRow = pDst + dstY * dstStride;
+            const BYTE* pSrcRow = pSrc + srcY * srcStride;
 
-        for (int x = 0; x < actualW; x++) {
-            int dstX = x + offX;
-            if (dstX < 0 || dstX >= dstW) continue;
+            for (int x = 0; x < actualW; x++) {
+                int dstX = x + offX;
+                if (dstX < 0 || dstX >= dstW) continue;
 
-            int srcOffset = lutIndices[x];
-            
-            // Unroll loop for known 24-bit (3 bytes)
-            pDstRow[dstX * dstBytes + 0] = pSrcRow[srcOffset + 0];
-            pDstRow[dstX * dstBytes + 1] = pSrcRow[srcOffset + 1];
-            pDstRow[dstX * dstBytes + 2] = pSrcRow[srcOffset + 2];
+                int srcOffset = lutIndices[x];
+                
+                // Unroll loop for known 24-bit (3 bytes)
+                pDstRow[dstX * dstBytes + 0] = pSrcRow[srcOffset + 0];
+                pDstRow[dstX * dstBytes + 1] = pSrcRow[srcOffset + 1];
+                pDstRow[dstX * dstBytes + 2] = pSrcRow[srcOffset + 2];
+            }
         }
-    }
+    });
 }
 
-#include "LR2BGAThreadPool.h"
+
 
 //------------------------------------------------------------------------------
 // Implementation: ResizeBilinear_SSE41 (128-bit SIMD + Multithreading)
@@ -553,48 +558,50 @@ void LR2BGAImageProc::ResizeBilinear_CppOpt(
     float scaleY = (float)(srcRectH - 1) / actualH;
     if (actualH <= 1) scaleY = 0;
 
-    for (int y = 0; y < actualH; y++) {
-        int dstY = y + offY;
-        if (dstY < 0 || dstY >= dstH) continue;
+    LR2BGAThreadPool::Instance().ParallelFor(0, actualH, [&](int startY, int endY) {
+        for (int y = startY; y < endY; y++) {
+            int dstY = y + offY;
+            if (dstY < 0 || dstY >= dstH) continue;
 
-        float fy = y * scaleY;
-        int y1 = rect.top + (int)fy;
-        if (y1 >= rect.bottom - 1) y1 = rect.bottom - 2;
-        if (y1 < rect.top) y1 = rect.top;
-        
-        float dy = fy - (int)fy;
-        int w_y = (int)(dy * PRECISION_SCALE); 
-        int inv_w_y = PRECISION_SCALE - w_y;
-
-        const BYTE* pSrcRow1 = pSrc + y1 * srcStride;
-        const BYTE* pSrcRow2 = pSrc + (y1 + 1) * srcStride;
-        BYTE* pDstRow = pDst + dstY * dstStride;
-
-        for (int x = 0; x < actualW; x++) {
-            int dstX = x + offX;
-            if (dstX < 0 || dstX >= dstW) continue;
-
-            int idx = lutIndices[x];
-            int w_x = lutWeights[x];
-            int inv_w_x = PRECISION_SCALE - w_x;
-
-            const BYTE* s1 = pSrcRow1 + idx;
-            const BYTE* s2 = pSrcRow2 + idx;
+            float fy = y * scaleY;
+            int y1 = rect.top + (int)fy;
+            if (y1 >= rect.bottom - 1) y1 = rect.bottom - 2;
+            if (y1 < rect.top) y1 = rect.top;
             
-            // RGB Loop
-            for (int c = 0; c < 3; c++) {
-                // Top row interpolation
-                // val = (val1 * inv_w_x + val2 * w_x)
-                int top = (s1[c] * inv_w_x + s1[c + srcBytes] * w_x) >> PRECISION_BITS;
-                int bottom = (s2[c] * inv_w_x + s2[c + srcBytes] * w_x) >> PRECISION_BITS;
+            float dy = fy - (int)fy;
+            int w_y = (int)(dy * PRECISION_SCALE); 
+            int inv_w_y = PRECISION_SCALE - w_y;
 
-                // Combine Y
-                int final_val = (top * inv_w_y + bottom * w_y) >> PRECISION_BITS;
+            const BYTE* pSrcRow1 = pSrc + y1 * srcStride;
+            const BYTE* pSrcRow2 = pSrc + (y1 + 1) * srcStride;
+            BYTE* pDstRow = pDst + dstY * dstStride;
 
-                pDstRow[dstX * dstBytes + c] = (BYTE)final_val;
+            for (int x = 0; x < actualW; x++) {
+                int dstX = x + offX;
+                if (dstX < 0 || dstX >= dstW) continue;
+
+                int idx = lutIndices[x];
+                int w_x = lutWeights[x];
+                int inv_w_x = PRECISION_SCALE - w_x;
+
+                const BYTE* s1 = pSrcRow1 + idx;
+                const BYTE* s2 = pSrcRow2 + idx;
+                
+                // RGB Loop
+                for (int c = 0; c < 3; c++) {
+                    // Top row interpolation
+                    // val = (val1 * inv_w_x + val2 * w_x)
+                    int top = (s1[c] * inv_w_x + s1[c + srcBytes] * w_x) >> PRECISION_BITS;
+                    int bottom = (s2[c] * inv_w_x + s2[c + srcBytes] * w_x) >> PRECISION_BITS;
+
+                    // Combine Y
+                    int final_val = (top * inv_w_y + bottom * w_y) >> PRECISION_BITS;
+
+                    pDstRow[dstX * dstBytes + c] = (BYTE)final_val;
+                }
             }
         }
-    }
+    });
 }
 
 // ------------------------------------------------------------------------------
@@ -615,6 +622,7 @@ void LR2BGAImageProc::ApplyBrightness(BYTE* pData, int width, int height, int st
                 ZeroMemory(pData + y * stride, width * 3);
             }
         }
+
         return;
     }
 
@@ -631,5 +639,188 @@ void LR2BGAImageProc::ApplyBrightness(BYTE* pData, int width, int height, int st
         }
     }
 }
+void LR2BGAImageProc::ResizeBilinear_AVX2(
+    const BYTE* pSrc, int srcW, int srcH, int srcStride, int srcBpp,
+    BYTE* pDst, int dstW, int dstH, int dstStride, int dstBpp,
+    int actualW, int actualH, int offX, int offY,
+    const RECT* pSrcRect, std::vector<int>& lutIndices, std::vector<short>& lutWeights)
+{
+    // Basic verification
+    if (actualW <= 0 || actualH <= 0) return;
 
+    if (srcBpp != 32) {
+        ResizeBilinear_SSE41(pSrc, srcW, srcH, srcStride, srcBpp,
+                             pDst, dstW, dstH, dstStride, dstBpp,
+                             actualW, actualH, offX, offY, pSrcRect, lutIndices, lutWeights);
+        return;
+    }
+
+    RECT rect = { 0, 0, srcW, srcH };
+    if (pSrcRect) rect = *pSrcRect;
+    int srcRectW = rect.right - rect.left;
+    int srcRectH = rect.bottom - rect.top;
+
+    int srcBytes = srcBpp / 8;
+    int dstBytes = dstBpp / 8;
+
+    const int PRECISION_BITS = 11;
+    const int PRECISION_SCALE = 1 << PRECISION_BITS; // 2048
+
+    if (lutIndices.size() < (size_t)actualW) lutIndices.resize(actualW);
+    if (lutWeights.size() < (size_t)(actualW * 2)) lutWeights.resize(actualW * 2);
+
+    float scaleX = (float)(srcRectW - 1) / actualW;
+    if (actualW <= 1) scaleX = 0;
+
+    for (int x = 0; x < actualW; x++) {
+        float fx = x * scaleX;
+        int x1 = rect.left + (int)fx;
+        if (x1 >= rect.right - 1) x1 = rect.right - 2;
+        if (x1 < rect.left) x1 = rect.left;
+
+        lutIndices[x] = x1 * srcBytes;
+
+        float dx = fx - (int)fx;
+        int w = (int)(dx * PRECISION_SCALE);
+        int inv_w = PRECISION_SCALE - w;
+        
+        lutWeights[x * 2 + 0] = (short)inv_w;
+        lutWeights[x * 2 + 1] = (short)w;
+    }
+
+    float scaleY = (float)(srcRectH - 1) / actualH;
+    if (actualH <= 1) scaleY = 0;
+
+    LR2BGAThreadPool::Instance().ParallelFor(0, actualH, [&](int startY, int endY) {
+        for (int y = startY; y < endY; y++) {
+            int dstY = y + offY;
+            if (dstY < 0 || dstY >= dstH) continue;
+
+            float fy = y * scaleY;
+            int y1 = rect.top + (int)fy;
+            if (y1 >= rect.bottom - 1) y1 = rect.bottom - 2;
+            if (y1 < rect.top) y1 = rect.top;
+
+            float dy = fy - (int)fy;
+            int w_y = (int)(dy * PRECISION_SCALE);
+            int inv_w_y = PRECISION_SCALE - w_y;
+
+            const BYTE* pSrcRow1 = pSrc + y1 * srcStride;
+            const BYTE* pSrcRow2 = pSrc + (y1 + 1) * srcStride;
+            BYTE* pDstRow = pDst + dstY * dstStride;
+
+            __m256i v_inv_wy = _mm256_set1_epi32(inv_w_y);
+            __m256i v_wy = _mm256_set1_epi32(w_y);
+
+            int x = 0;
+            
+            // AVX2 Loop (Process 2 pixels at a time)
+            for (; x <= actualW - 2; x += 2) {
+                int dstX = x + offX;
+                if (dstX < 0 || dstX >= dstW - 1) {
+                    goto ScalarFallback_AVX2; 
+                }
+
+                int idx0 = lutIndices[x];
+                int idx1 = lutIndices[x+1];
+
+                // Load 2+2 pixels (Top and Bottom rows)
+                int p0_TL = *(int*)(pSrcRow1 + idx0); int p0_TR = *(int*)(pSrcRow1 + idx0 + 4);
+                int p0_BL = *(int*)(pSrcRow2 + idx0); int p0_BR = *(int*)(pSrcRow2 + idx0 + 4);
+
+                int p1_TL = *(int*)(pSrcRow1 + idx1); int p1_TR = *(int*)(pSrcRow1 + idx1 + 4);
+                int p1_BL = *(int*)(pSrcRow2 + idx1); int p1_BR = *(int*)(pSrcRow2 + idx1 + 4);
+
+                short i0 = lutWeights[x*2];   short w0 = lutWeights[x*2+1];
+                short i1 = lutWeights[x*2+2]; short w1 = lutWeights[x*2+3];
+
+                // Weights for horizontal interpolation [inv_w, w, inv_w, w...]
+                // Pixel 0 weights (8 shorts)
+                __m128i v_wx0_128 = _mm_set_epi16(w0,i0,w0,i0,w0,i0,w0,i0);
+                // Pixel 1 weights (8 shorts)
+                __m128i v_wx1_128 = _mm_set_epi16(w1,i1,w1,i1,w1,i1,w1,i1);
+                
+                // Combine to 256: [W1 | W0]
+                __m256i v_WX = _mm256_inserti128_si256(_mm256_castsi128_si256(v_wx0_128), v_wx1_128, 1);
+
+                // Top Line Interpolation
+                // Expand pixels to 16-bit
+                __m128i t0 = _mm_unpacklo_epi8(_mm_cvtsi32_si128(p0_TL), _mm_cvtsi32_si128(p0_TR));
+                __m128i t1 = _mm_unpacklo_epi8(_mm_cvtsi32_si128(p1_TL), _mm_cvtsi32_si128(p1_TR));
+                
+                __m128i t0_16 = _mm_cvtepu8_epi16(t0); // 128 bit
+                __m128i t1_16 = _mm_cvtepu8_epi16(t1); // 128 bit
+                
+                // Combine to 256: [T1 | T0]
+                __m256i v_T_16 = _mm256_inserti128_si256(_mm256_castsi128_si256(t0_16), t1_16, 1);
+                
+                // Bottom Line Interpolation
+                __m128i b0 = _mm_unpacklo_epi8(_mm_cvtsi32_si128(p0_BL), _mm_cvtsi32_si128(p0_BR));
+                __m128i b1 = _mm_unpacklo_epi8(_mm_cvtsi32_si128(p1_BL), _mm_cvtsi32_si128(p1_BR));
+                
+                __m128i b0_16 = _mm_cvtepu8_epi16(b0);
+                __m128i b1_16 = _mm_cvtepu8_epi16(b1);
+                
+                __m256i v_B_16 = _mm256_inserti128_si256(_mm256_castsi128_si256(b0_16), b1_16, 1);
+
+                // Horizontal Interpolation (madd_epi16)
+                // Result: 32-bit x 8 integers (4 per pixel)
+                __m256i v_top = _mm256_madd_epi16(v_T_16, v_WX); 
+                __m256i v_btm = _mm256_madd_epi16(v_B_16, v_WX);
+                
+                // Vertical Interpolation
+                __m256i v_res = _mm256_add_epi32(
+                    _mm256_mullo_epi32(v_top, v_inv_wy), 
+                    _mm256_mullo_epi32(v_btm, v_wy));
+                    
+                v_res = _mm256_srai_epi32(v_res, PRECISION_BITS * 2);
+                
+                // Pack back to 8-bit
+                // 32-bit -> 16-bit
+                __m256i v_res_16 = _mm256_packus_epi32(v_res, _mm256_setzero_si256());
+                // v_res_16: [ Lane1(4 shorts) | 0 | Lane0(4 shorts) | 0 ] ?
+                // packus_epi32 packs 2 128-bit blocks independently.
+                // Block 0: Res0(4 ints) -> Res0(4 shorts) + Zero(4 shorts)
+                // Result Block 0: [ Res0_16 | 0 ] (64 bits | 64 bits)
+                // Block 1: Res1(4 ints) -> Res1(4 shorts) + Zero
+                // Result Block 1: [ Res1_16 | 0 ]
+                
+                // 16-bit -> 8-bit
+                __m256i v_res_8 = _mm256_packus_epi16(v_res_16, _mm256_setzero_si256());
+                // Block 0: Res0_16(4 shorts + 4 zeros) -> Res0_8(4 bytes + 4 zeros) + Zeros
+                // Result Block 0: [ Res0_8 | 0 | ... ]
+                // Res0_8 is 32 bits (BGRA).
+                
+                // Extract results
+                int val0 = _mm_cvtsi128_si32(_mm256_castsi256_si128(v_res_8));
+                int val1 = _mm_cvtsi128_si32(_mm256_extracti128_si256(v_res_8, 1));
+                
+                // Store results
+                *(short*)(pDstRow + dstX * dstBytes) = (short)val0; 
+                *(pDstRow + dstX * dstBytes + 2) = (BYTE)(val0 >> 16);
+                
+                *(short*)(pDstRow + (dstX+1) * dstBytes) = (short)val1;
+                *(pDstRow + (dstX+1) * dstBytes + 2) = (BYTE)(val1 >> 16);
+            }
+
+            // Scalar fallback for tail/remainder
+            ScalarFallback_AVX2:
+            for (; x < actualW; x++) {
+                int dstX = x + offX;
+                if (dstX < 0 || dstX >= dstW) continue;
+                int idx = lutIndices[x];
+                int w_x = lutWeights[x * 2 + 1];
+                int inv_w_x = lutWeights[x * 2 + 0];
+                const BYTE* s1 = pSrcRow1 + idx;
+                const BYTE* s2 = pSrcRow2 + idx;
+                for (int c = 0; c < 3; c++) {
+                    int top = (s1[c] * inv_w_x + s1[c + srcBytes] * w_x) >> PRECISION_BITS;
+                    int bottom = (s2[c] * inv_w_x + s2[c + srcBytes] * w_x) >> PRECISION_BITS;
+                    int final_val = (top * inv_w_y + bottom * w_y) >> PRECISION_BITS;
+                    pDstRow[dstX * dstBytes + c] = (BYTE)final_val;
+                }
+            }
+        }
+    });
+}
 
