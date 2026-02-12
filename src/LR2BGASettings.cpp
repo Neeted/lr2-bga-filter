@@ -42,6 +42,10 @@ LR2BGASettings::LR2BGASettings()
     , m_keyboardCloseEnabled(false)
     , m_keyboardKeyCode(VK_RETURN)
     
+    // 接続制限 (デフォルト有効)
+    , m_onlyOutputToLR2(true)
+    , m_onlyOutputToRenderer(true)
+    
     // デバッグウィンドウ初期値 (CW_USEDEFAULT)
     , m_debugWindowX(CW_USEDEFAULT)
     , m_debugWindowY(CW_USEDEFAULT)
@@ -107,6 +111,10 @@ void LR2BGASettings::Load()
         if (RegQueryValueExW(hKey, L"GamepadButtonID", NULL, NULL, (LPBYTE)&data, &size) == ERROR_SUCCESS) m_gamepadButtonID = (int)data;
         if (RegQueryValueExW(hKey, L"KeyboardCloseEnabled", NULL, NULL, (LPBYTE)&data, &size) == ERROR_SUCCESS) m_keyboardCloseEnabled = (data != 0);
         if (RegQueryValueExW(hKey, L"KeyboardKeyCode", NULL, NULL, (LPBYTE)&data, &size) == ERROR_SUCCESS) m_keyboardKeyCode = (int)data;
+
+        // 接続制限設定
+        if (RegQueryValueExW(hKey, L"OnlyOutputToLR2", NULL, NULL, (LPBYTE)&data, &size) == ERROR_SUCCESS) m_onlyOutputToLR2 = (data != 0);
+        if (RegQueryValueExW(hKey, L"OnlyOutputToRenderer", NULL, NULL, (LPBYTE)&data, &size) == ERROR_SUCCESS) m_onlyOutputToRenderer = (data != 0);
 
         // デバッグウィンドウ設定読み込み
         bool hasDebugPos = false;
@@ -177,6 +185,10 @@ void LR2BGASettings::Save()
         data = (DWORD)m_gamepadButtonID; RegSetValueExW(hKey, L"GamepadButtonID", 0, REG_DWORD, (LPBYTE)&data, sizeof(DWORD));
         data = m_keyboardCloseEnabled ? 1 : 0; RegSetValueExW(hKey, L"KeyboardCloseEnabled", 0, REG_DWORD, (LPBYTE)&data, sizeof(DWORD));
         data = (DWORD)m_keyboardKeyCode; RegSetValueExW(hKey, L"KeyboardKeyCode", 0, REG_DWORD, (LPBYTE)&data, sizeof(DWORD));
+
+        // 接続制限設定
+        data = m_onlyOutputToLR2 ? 1 : 0; RegSetValueExW(hKey, L"OnlyOutputToLR2", 0, REG_DWORD, (LPBYTE)&data, sizeof(DWORD));
+        data = m_onlyOutputToRenderer ? 1 : 0; RegSetValueExW(hKey, L"OnlyOutputToRenderer", 0, REG_DWORD, (LPBYTE)&data, sizeof(DWORD));
 
         // デバッグウィンドウ設定保存
         data = (DWORD)m_debugWindowX; RegSetValueExW(hKey, L"DebugWindowX", 0, REG_DWORD, (LPBYTE)&data, sizeof(DWORD));

@@ -164,6 +164,13 @@ DECLARE_INTERFACE_(ILR2BGAFilterSettings, IUnknown) {
 
   // 統計情報のリセット (Reset Statistics)
   STDMETHOD(ResetPerformanceStatistics)(THIS) PURE;
+
+  // 接続制限設定
+  STDMETHOD(GetOnlyOutputToLR2)(THIS_ BOOL * pEnabled) PURE;
+  STDMETHOD(SetOnlyOutputToLR2)(THIS_ BOOL enabled) PURE;
+
+  STDMETHOD(GetOnlyOutputToRenderer)(THIS_ BOOL * pEnabled) PURE;
+  STDMETHOD(SetOnlyOutputToRenderer)(THIS_ BOOL enabled) PURE;
 };
 
 //------------------------------------------------------------------------------
@@ -177,6 +184,20 @@ public:
       : CTransformInputPin(pObjectName, pTransformFilter, phr, pName) {}
 
   // CheckConnectをオーバーライドして上流フィルタを検証
+  HRESULT CheckConnect(IPin *pPin) override;
+};
+
+//------------------------------------------------------------------------------
+// CLR2BGAOutputPin クラス
+// 接続先フィルタの制限を行うためのカスタム出力ピン
+//------------------------------------------------------------------------------
+class CLR2BGAOutputPin : public CTransformOutputPin {
+public:
+  CLR2BGAOutputPin(TCHAR *pObjectName, CTransformFilter *pTransformFilter,
+                   HRESULT *phr, LPCWSTR pName)
+      : CTransformOutputPin(pObjectName, pTransformFilter, phr, pName) {}
+
+  // CheckConnectをオーバーライドして下流フィルタを検証
   HRESULT CheckConnect(IPin *pPin) override;
 };
 
@@ -278,6 +299,12 @@ public:
   STDMETHOD(GetLetterboxStability)(int *pStability) override;
   STDMETHOD(SetLetterboxStability)(int stability) override;
   STDMETHOD(ResetPerformanceStatistics)() override;
+
+  STDMETHOD(GetOnlyOutputToLR2)(BOOL *pEnabled) override;
+  STDMETHOD(SetOnlyOutputToLR2)(BOOL enabled) override;
+
+  STDMETHOD(GetOnlyOutputToRenderer)(BOOL *pEnabled) override;
+  STDMETHOD(SetOnlyOutputToRenderer)(BOOL enabled) override;
 
   //--------------------------------------------------------------------------
   // CTransformFilter Overrides

@@ -6,6 +6,7 @@
 #define NO_DSHOW_STRSAFE
 
 #include "LR2NullAudioRenderer.h"
+#include "LR2BGASettings.h"
 
 //------------------------------------------------------------------------------
 // フィルタ情報 (Filter Information)
@@ -73,6 +74,22 @@ HRESULT CLR2NullAudioRenderer::CheckMediaType(const CMediaType *pmt) {
   // MEDIATYPE_Audio のみ受け入れ
   if (pmt->majortype != MEDIATYPE_Audio) {
     return E_FAIL;
+  }
+
+  // 接続制限チェック (Only output to LR2)
+  // 毎回設定をロードするのは非効率だが、接続時のみなので許容範囲
+  LR2BGASettings settings;
+  settings.Load();
+
+  if (settings.m_onlyOutputToLR2) {
+    WCHAR szPath[MAX_PATH];
+    if (GetModuleFileNameW(NULL, szPath, MAX_PATH)) {
+      _wcslwr_s(szPath, MAX_PATH);
+      if (wcsstr(szPath, L"body") == NULL) {
+        // "body" が含まれていない場合、接続を拒否
+        return E_FAIL;
+      }
+    }
   }
 
   // サブタイプは問わない（AAC, MP3, PCM 等すべて受け入れ）

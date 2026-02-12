@@ -69,6 +69,8 @@ CLR2BGAFilterPropertyPage::CLR2BGAFilterPropertyPage(LPUNKNOWN pUnk)
     , m_gamepadButtonID(0)
     , m_keyboardCloseEnabled(FALSE)
     , m_keyboardKeyCode(0)
+    , m_onlyOutputToLR2(TRUE)
+    , m_onlyOutputToRenderer(TRUE)
 {
 }
 
@@ -137,6 +139,10 @@ HRESULT CLR2BGAFilterPropertyPage::OnConnect(IUnknown* pUnk)
 
     // Auto Open
     m_pSettings->GetAutoOpenSettings(&m_autoOpen);
+
+    // Connection Restrictions
+    m_pSettings->GetOnlyOutputToLR2(&m_onlyOutputToLR2);
+    m_pSettings->GetOnlyOutputToRenderer(&m_onlyOutputToRenderer);
 
     return S_OK;
 }
@@ -281,6 +287,10 @@ HRESULT CLR2BGAFilterPropertyPage::OnApplyChanges()
     
     m_pSettings->SetLetterboxThreshold(m_lbThreshold);
     m_pSettings->SetLetterboxStability(m_lbStability);
+
+    // Connection Restrictions
+    m_pSettings->SetOnlyOutputToLR2(m_onlyOutputToLR2);
+    m_pSettings->SetOnlyOutputToRenderer(m_onlyOutputToRenderer);
 
     // 統計情報のリセット (設定変更の影響を確認しやすくするため)
   m_pSettings->ResetPerformanceStatistics();
@@ -427,6 +437,10 @@ void CLR2BGAFilterPropertyPage::InitBindings()
             SetDlgItemTextW(m_Dlg, IDC_LABEL_LB_MS, buf);
         }
     });
+
+    // 6. 接続制限 (Connection Restrictions)
+    m_bindings.push_back({ IDC_CHECK_ONLY_LR2, BindType::Bool, &m_onlyOutputToLR2 });
+    m_bindings.push_back({ IDC_CHECK_RENDERER_ONLY, BindType::Bool, &m_onlyOutputToRenderer });
 }
 
 void CLR2BGAFilterPropertyPage::ApplyToUI()

@@ -82,6 +82,10 @@
 #define IDC_LABEL_LB_MS             1114
 #define IDC_SPIN_LB_THRESHOLD       1115
 
+// Controls - Connection Restrictions
+#define IDC_CHECK_ONLY_LR2          1120
+#define IDC_CHECK_RENDERER_ONLY     1121
+
 // String table
 #define IDS_TITLE                   2001
 

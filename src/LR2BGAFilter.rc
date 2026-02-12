@@ -107,8 +107,12 @@ BEGIN
     LTEXT           "(000 ms)", IDC_LABEL_LB_MS, 180, 253, 30, 8
 
     // Bottom Controls
-    AUTOCHECKBOX    "Debug Mode (Info Window)", IDC_CHECK_DEBUGMODE, 7, 277, 190, 10
-    AUTOCHECKBOX    "Auto Open Properties", IDC_CHECK_AUTO_OPEN, 7, 292, 190, 10
+    AUTOCHECKBOX    "Debug Mode (Info Window)", IDC_CHECK_DEBUGMODE, 7, 277, 110, 10
+    AUTOCHECKBOX    "Auto Open Properties", IDC_CHECK_AUTO_OPEN, 7, 292, 110, 10
+    
+    // Connection Restrictions (Bottom Right)
+    AUTOCHECKBOX    "Only output to LR2.", IDC_CHECK_ONLY_LR2, 120, 277, 90, 10
+    AUTOCHECKBOX    "Only output to renderer.", IDC_CHECK_RENDERER_ONLY, 120, 292, 90, 10
 END
 
 //------------------------------------------------------------------------------
