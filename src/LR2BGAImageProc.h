@@ -70,6 +70,12 @@ private:
                                    int actW, int actH, int offX, int offY, const RECT* pSrcRect,
                                    std::vector<int>& lutI, std::vector<short>& lutW);
 
+  // AVX2 Implementations
+  static void ResizeBilinear_AVX2(const BYTE* pSrc, int srcW, int srcH, int srcStr, int srcBpp,
+                                  BYTE* pDst, int dstW, int dstH, int dstStr, int dstBpp,
+                                  int actW, int actH, int offX, int offY, const RECT* pSrcRect,
+                                  std::vector<int>& lutI, std::vector<short>& lutW);
+
   // 関数ポインタ (Dispatch Target)
   static ResizeFunc pResizeNearest;
   static ResizeFunc pResizeBilinear;
