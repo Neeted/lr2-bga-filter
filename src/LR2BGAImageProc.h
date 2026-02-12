@@ -20,6 +20,8 @@ public:
       int actualWidth, int actualHeight, int offsetX, int offsetY, 
       const RECT* pSrcRect, std::vector<int>& lutIndices);
 
+
+
   // 双線形補間（バイリニア）によるリサイズ（高品質、写真・実写向き）
   // RGB32/24入力 -> RGB24出力
   static void ResizeBilinear(
@@ -36,18 +38,24 @@ public:
   static void Initialize();
 
 private:
-  // 関数ポインタ型定義
+  // 関数ポインタ型定義 (Bilinear 用: LUTWeights あり)
   typedef void (*ResizeFunc)(const BYTE* pSrc, int srcW, int srcH, int srcStr, int srcBpp,
                              BYTE* pDst, int dstW, int dstH, int dstStr, int dstBpp,
                              int actW, int actH, int offX, int offY, const RECT* pSrcRect,
                              std::vector<int>& lutI, std::vector<short>& lutW);
 
+  // 関数ポインタ型定義 (NearestNeighbor 用: LUTWeights なし)
+  typedef void (*ResizeFuncNearest)(const BYTE* pSrc, int srcW, int srcH, int srcStr, int srcBpp,
+                                    BYTE* pDst, int dstW, int dstH, int dstStr, int dstBpp,
+                                    int actW, int actH, int offX, int offY, const RECT* pSrcRect,
+                                    std::vector<int>& lutI);
+
   // 実装関数 (C++ Pure)
   static void ResizeNearestNeighbor_Cpp(const BYTE* pSrc, int srcW, int srcH, int srcStr, int srcBpp,
                                         BYTE* pDst, int dstW, int dstH, int dstStr, int dstBpp,
                                         int actW, int actH, int offX, int offY, const RECT* pSrcRect,
-                                        std::vector<int>& lutI, std::vector<short>& lutW);
-
+                                        std::vector<int>& lutI); // 引数修正（ここも実は不要な引数があった可能性があるが、cpp側と合わせる）
+                                        
   static void ResizeBilinear_Cpp(const BYTE* pSrc, int srcW, int srcH, int srcStr, int srcBpp,
                                  BYTE* pDst, int dstW, int dstH, int dstStr, int dstBpp,
                                  int actW, int actH, int offX, int offY, const RECT* pSrcRect,
@@ -57,7 +65,7 @@ private:
   static void ResizeNearestNeighbor_CppOpt(const BYTE* pSrc, int srcW, int srcH, int srcStr, int srcBpp,
                                            BYTE* pDst, int dstW, int dstH, int dstStr, int dstBpp,
                                            int actW, int actH, int offX, int offY, const RECT* pSrcRect,
-                                           std::vector<int>& lutI, std::vector<short>& lutW);
+                                           std::vector<int>& lutI); // 引数修正
 
   static void ResizeBilinear_CppOpt(const BYTE* pSrc, int srcW, int srcH, int srcStr, int srcBpp,
                                     BYTE* pDst, int dstW, int dstH, int dstStr, int dstBpp,
@@ -77,7 +85,7 @@ private:
                                   std::vector<int>& lutI, std::vector<short>& lutW);
 
   // 関数ポインタ (Dispatch Target)
-  static ResizeFunc pResizeNearest;
+  static ResizeFuncNearest pResizeNearest; // 型変更
   static ResizeFunc pResizeBilinear;
   static bool m_initialized;
 };

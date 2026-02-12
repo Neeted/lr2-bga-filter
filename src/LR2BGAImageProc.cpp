@@ -1,5 +1,6 @@
-#include "LR2BGAImageProc.h"
+﻿#include "LR2BGAImageProc.h"
 #include "LR2BGACPU.h"
+#include "LR2BGAThreadPool.h"
 
 //------------------------------------------------------------------------------
 // 定数定義 (Constants)
@@ -8,7 +9,7 @@ constexpr int kMaxBrightness = 255;             // 最大輝度値 (8bit)
 constexpr int kMaxBrightnessPercent = 100;      // 最大輝度 (%)
 
 // Static Initializations
-LR2BGAImageProc::ResizeFunc LR2BGAImageProc::pResizeNearest = LR2BGAImageProc::ResizeNearestNeighbor_Cpp;
+LR2BGAImageProc::ResizeFuncNearest LR2BGAImageProc::pResizeNearest = LR2BGAImageProc::ResizeNearestNeighbor_Cpp;
 LR2BGAImageProc::ResizeFunc LR2BGAImageProc::pResizeBilinear = LR2BGAImageProc::ResizeBilinear_Cpp;
 bool LR2BGAImageProc::m_initialized = false;
 
@@ -22,11 +23,12 @@ void LR2BGAImageProc::Initialize() {
     // Check CPU features and upgrade if possible
     if (LR2BGACPU::IsSSE41Supported()) {
         // SSE4.1 is supported
+        // NearestNeighbor is already parallelized in CppOpt, no need for SIMD fallback
         pResizeBilinear = ResizeBilinear_SSE41;
     }
 
     if (LR2BGACPU::IsAVX2Supported()) {
-        // AVX2 is also supported, upgrade to AVX2 implementation
+        // AVX2 is also supported
         pResizeBilinear = ResizeBilinear_AVX2;
     }
 
@@ -38,7 +40,7 @@ void LR2BGAImageProc::Initialize() {
 //
 // 概要:
 //   フィルタ内で使用される画像処理アルゴリズムのコレクションです。
-//   実行環境のCPU機能（SSE4.1等）に応じて最適な実装を動的に選択します。
+//   実行環境のCPU機能（SSE4.1/AVX2等）に応じて最適な実装を選択、または並列化された標準実装を使用します。
 //
 // 機能:
 //   - リサイズ: 最近傍法 (Nearest Neighbor) および バイリニア法 (Bilinear)。
@@ -46,13 +48,13 @@ void LR2BGAImageProc::Initialize() {
 //   - 色変換/明るさ調整: ピクセル単位の操作。
 //
 // 実装の詳細:
-//   - CppOpt: 固定小数点演算とLUT（Look-Up Table）を使用した最適化版標準実装。
-//   - SSE4.1: SSE4.1命令セットを使用したSIMD実装（Bilinear対応）。
-//   - MultiThread: スレッドプールを使用した並列処理（Yループ分割）。
+//   - CppOpt: 固定小数点演算とLUT（Look-Up Table）を使用した最適化版標準実装（マルチスレッド対応）。
+//   - SSE4.1/AVX2: SIMD命令セットを使用した最適化実装（BilinearかつRGB32入力時に適用）。
+//   - MultiThread: スレッドプールを使用した並列処理（全実装で適用）。
 //
 // パフォーマンスノート:
-//   - CPUがSSE4.1をサポートしている場合、自動的にSIMD版が選択されます。
-//   - マルチスレッド化により、マルチコアCPUでの処理効率が最大化されます。
+//   - Nearest Neighborは常に並列化されたCppOpt実装が使用されます。
+//   - Bilinearは条件（RGB32入力かつ対応CPU）を満たせばSIMD版が、それ以外は並列化されたCppOpt版が使用されます。
 //   - バッファオーバーランを防ぐため、ストライドや境界チェックを厳密に行う必要があります。
 //-------------------------------------------------------------------------------
 
@@ -107,12 +109,11 @@ void LR2BGAImageProc::ResizeNearestNeighbor(
 {
     if (!m_initialized) Initialize();
     
-    // 関数ポインタのシグネチャ互換用ダミー
-    // NearestNeighbor系の実装は lutWeights を使用しないため空で問題ない
-    std::vector<short> dummyW;
+    // 関数ポインタのシグネチャ互換用ダミー不要
+    // NearestNeighbor系の実装は lutWeights を引数に持たない
     pResizeNearest(pSrc, srcWidth, srcHeight, srcStride, srcBpp, 
                    pDst, dstWidth, dstHeight, dstStride, dstBpp, 
-                   actualWidth, actualHeight, offsetX, offsetY, pSrcRect, lutIndices, dummyW);
+                   actualWidth, actualHeight, offsetX, offsetY, pSrcRect, lutIndices);
 }
 
 // ------------------------------------------------------------------------------
@@ -122,7 +123,7 @@ void LR2BGAImageProc::ResizeNearestNeighbor_Cpp(
     const BYTE* pSrc, int srcWidth, int srcHeight, int srcStride, int srcBpp,
     BYTE* pDst, int dstWidth, int dstHeight, int dstStride, int dstBpp,
     int actualWidth, int actualHeight, int offsetX, int offsetY, 
-    const RECT* pSrcRect, std::vector<int>& lutIndices, std::vector<short>& lutWeights)
+    const RECT* pSrcRect, std::vector<int>& lutIndices)
 {
     int srcBytes = srcBpp / 8;
     int dstBytes = dstBpp / 8;
@@ -260,7 +261,7 @@ void LR2BGAImageProc::ResizeNearestNeighbor_CppOpt(
     const BYTE* pSrc, int srcW, int srcH, int srcStride, int srcBpp,
     BYTE* pDst, int dstW, int dstH, int dstStride, int dstBpp,
     int actualW, int actualH, int offX, int offY,
-    const RECT* pSrcRect, std::vector<int>& lutIndices, std::vector<short>& lutWeights)
+    const RECT* pSrcRect, std::vector<int>& lutIndices)
 {
     int srcBytes = srcBpp / 8;
     int dstBytes = dstBpp / 8;
@@ -285,31 +286,34 @@ void LR2BGAImageProc::ResizeNearestNeighbor_CppOpt(
 
     float scaleY = (float)srcRectH / actualH;
 
-    for (int y = 0; y < actualH; y++) {
-        int dstY = y + offY;
-        if (dstY < 0 || dstY >= dstH) continue;
+    // Parallel execution
+    LR2BGAThreadPool::Instance().ParallelFor(0, actualH, [&](int startY, int endY) {
+        for (int y = startY; y < endY; y++) {
+            int dstY = y + offY;
+            if (dstY < 0 || dstY >= dstH) continue;
 
-        int srcY = rect.top + (int)(y * scaleY);
-        if (srcY >= rect.bottom) srcY = rect.bottom - 1;
+            int srcY = rect.top + (int)(y * scaleY);
+            if (srcY >= rect.bottom) srcY = rect.bottom - 1;
 
-        BYTE* pDstRow = pDst + dstY * dstStride;
-        const BYTE* pSrcRow = pSrc + srcY * srcStride;
+            BYTE* pDstRow = pDst + dstY * dstStride;
+            const BYTE* pSrcRow = pSrc + srcY * srcStride;
 
-        for (int x = 0; x < actualW; x++) {
-            int dstX = x + offX;
-            if (dstX < 0 || dstX >= dstW) continue;
+            for (int x = 0; x < actualW; x++) {
+                int dstX = x + offX;
+                if (dstX < 0 || dstX >= dstW) continue;
 
-            int srcOffset = lutIndices[x];
-            
-            // Unroll loop for known 24-bit (3 bytes)
-            pDstRow[dstX * dstBytes + 0] = pSrcRow[srcOffset + 0];
-            pDstRow[dstX * dstBytes + 1] = pSrcRow[srcOffset + 1];
-            pDstRow[dstX * dstBytes + 2] = pSrcRow[srcOffset + 2];
+                int srcOffset = lutIndices[x];
+                
+                // Unroll loop for known 24-bit (3 bytes)
+                pDstRow[dstX * dstBytes + 0] = pSrcRow[srcOffset + 0];
+                pDstRow[dstX * dstBytes + 1] = pSrcRow[srcOffset + 1];
+                pDstRow[dstX * dstBytes + 2] = pSrcRow[srcOffset + 2];
+            }
         }
-    }
+    });
 }
 
-#include "LR2BGAThreadPool.h"
+
 
 //------------------------------------------------------------------------------
 // Implementation: ResizeBilinear_SSE41 (128-bit SIMD + Multithreading)
@@ -554,48 +558,50 @@ void LR2BGAImageProc::ResizeBilinear_CppOpt(
     float scaleY = (float)(srcRectH - 1) / actualH;
     if (actualH <= 1) scaleY = 0;
 
-    for (int y = 0; y < actualH; y++) {
-        int dstY = y + offY;
-        if (dstY < 0 || dstY >= dstH) continue;
+    LR2BGAThreadPool::Instance().ParallelFor(0, actualH, [&](int startY, int endY) {
+        for (int y = startY; y < endY; y++) {
+            int dstY = y + offY;
+            if (dstY < 0 || dstY >= dstH) continue;
 
-        float fy = y * scaleY;
-        int y1 = rect.top + (int)fy;
-        if (y1 >= rect.bottom - 1) y1 = rect.bottom - 2;
-        if (y1 < rect.top) y1 = rect.top;
-        
-        float dy = fy - (int)fy;
-        int w_y = (int)(dy * PRECISION_SCALE); 
-        int inv_w_y = PRECISION_SCALE - w_y;
-
-        const BYTE* pSrcRow1 = pSrc + y1 * srcStride;
-        const BYTE* pSrcRow2 = pSrc + (y1 + 1) * srcStride;
-        BYTE* pDstRow = pDst + dstY * dstStride;
-
-        for (int x = 0; x < actualW; x++) {
-            int dstX = x + offX;
-            if (dstX < 0 || dstX >= dstW) continue;
-
-            int idx = lutIndices[x];
-            int w_x = lutWeights[x];
-            int inv_w_x = PRECISION_SCALE - w_x;
-
-            const BYTE* s1 = pSrcRow1 + idx;
-            const BYTE* s2 = pSrcRow2 + idx;
+            float fy = y * scaleY;
+            int y1 = rect.top + (int)fy;
+            if (y1 >= rect.bottom - 1) y1 = rect.bottom - 2;
+            if (y1 < rect.top) y1 = rect.top;
             
-            // RGB Loop
-            for (int c = 0; c < 3; c++) {
-                // Top row interpolation
-                // val = (val1 * inv_w_x + val2 * w_x)
-                int top = (s1[c] * inv_w_x + s1[c + srcBytes] * w_x) >> PRECISION_BITS;
-                int bottom = (s2[c] * inv_w_x + s2[c + srcBytes] * w_x) >> PRECISION_BITS;
+            float dy = fy - (int)fy;
+            int w_y = (int)(dy * PRECISION_SCALE); 
+            int inv_w_y = PRECISION_SCALE - w_y;
 
-                // Combine Y
-                int final_val = (top * inv_w_y + bottom * w_y) >> PRECISION_BITS;
+            const BYTE* pSrcRow1 = pSrc + y1 * srcStride;
+            const BYTE* pSrcRow2 = pSrc + (y1 + 1) * srcStride;
+            BYTE* pDstRow = pDst + dstY * dstStride;
 
-                pDstRow[dstX * dstBytes + c] = (BYTE)final_val;
+            for (int x = 0; x < actualW; x++) {
+                int dstX = x + offX;
+                if (dstX < 0 || dstX >= dstW) continue;
+
+                int idx = lutIndices[x];
+                int w_x = lutWeights[x];
+                int inv_w_x = PRECISION_SCALE - w_x;
+
+                const BYTE* s1 = pSrcRow1 + idx;
+                const BYTE* s2 = pSrcRow2 + idx;
+                
+                // RGB Loop
+                for (int c = 0; c < 3; c++) {
+                    // Top row interpolation
+                    // val = (val1 * inv_w_x + val2 * w_x)
+                    int top = (s1[c] * inv_w_x + s1[c + srcBytes] * w_x) >> PRECISION_BITS;
+                    int bottom = (s2[c] * inv_w_x + s2[c + srcBytes] * w_x) >> PRECISION_BITS;
+
+                    // Combine Y
+                    int final_val = (top * inv_w_y + bottom * w_y) >> PRECISION_BITS;
+
+                    pDstRow[dstX * dstBytes + c] = (BYTE)final_val;
+                }
             }
         }
-    }
+    });
 }
 
 // ------------------------------------------------------------------------------
@@ -616,6 +622,7 @@ void LR2BGAImageProc::ApplyBrightness(BYTE* pData, int width, int height, int st
                 ZeroMemory(pData + y * stride, width * 3);
             }
         }
+
         return;
     }
 
@@ -632,12 +639,6 @@ void LR2BGAImageProc::ApplyBrightness(BYTE* pData, int width, int height, int st
         }
     }
 }
-
-
-
-//------------------------------------------------------------------------------
-// Implementation: ResizeBilinear_AVX2 (256-bit SIMD + Multithreading)
-//------------------------------------------------------------------------------
 void LR2BGAImageProc::ResizeBilinear_AVX2(
     const BYTE* pSrc, int srcW, int srcH, int srcStride, int srcBpp,
     BYTE* pDst, int dstW, int dstH, int dstStride, int dstBpp,
@@ -822,3 +823,4 @@ void LR2BGAImageProc::ResizeBilinear_AVX2(
         }
     });
 }
+
