@@ -706,7 +706,7 @@ CBasePin *CLR2BGAFilter::GetPin(int n) {
       return NULL;
     }
 
-    m_pOutput = new CTransformOutputPin(NAME("LR2 BGA Filter Output"), this,
+    m_pOutput = new CLR2BGAOutputPin(NAME("LR2 BGA Filter Output"), this,
                                         &hr, L"Out");
     if (FAILED(hr) || m_pOutput == NULL) {
       delete m_pInput;
@@ -751,6 +751,103 @@ HRESULT CLR2BGAInputPin::CheckConnect(IPin *pPin) {
   }
   return S_OK;
 }
+
+//------------------------------------------------------------------------------
+// CLR2BGAOutputPin::CheckConnect
+// 接続先フィルタの検証 (プロセス名チェック、レンダラーチェック)
+//------------------------------------------------------------------------------
+HRESULT CLR2BGAOutputPin::CheckConnect(IPin *pPin) {
+  HRESULT hr = CTransformOutputPin::CheckConnect(pPin);
+  if (FAILED(hr)) return hr;
+
+  CLR2BGAFilter* pFilter = static_cast<CLR2BGAFilter*>(m_pTransformFilter);
+  LR2BGASettings* pSettings = pFilter->m_pSettings;
+
+  // 1. プロセス名チェック (Only output to LR2)
+  if (pSettings->m_onlyOutputToLR2) {
+    WCHAR szPath[MAX_PATH];
+    if (GetModuleFileNameW(NULL, szPath, MAX_PATH)) {
+      // パスを小文字に変換してチェック
+      _wcslwr_s(szPath, MAX_PATH);
+      if (wcsstr(szPath, L"body") == NULL) {
+        // "body" が含まれていない場合、接続を拒否
+        // ただし、設定ツール(dllhost, rundll32)からの呼び出しは考慮する必要があるかも？
+        // 基本的にフィルタ接続はホストプロセス内で行われるため、これで機能するはず。
+        // GraphStudioNext等の別プロセスでロードされた場合は拒否される（意図通り）。
+        return E_FAIL;
+      }
+    }
+  }
+
+  // 2. 出力先フィルタの種類チェック (Only output to renderer)
+  if (pSettings->m_onlyOutputToRenderer) {
+    PIN_INFO pinInfo;
+    if (SUCCEEDED(pPin->QueryPinInfo(&pinInfo))) {
+      if (pinInfo.pFilter) {
+        bool bHasOutputPin = false;
+        IEnumPins* pEnum = NULL;
+        if (SUCCEEDED(pinInfo.pFilter->EnumPins(&pEnum))) {
+          IPin* pP = NULL;
+          while (pEnum->Next(1, &pP, NULL) == S_OK) {
+            PIN_DIRECTION dir;
+            pP->QueryDirection(&dir);
+            if (dir == PINDIR_OUTPUT) {
+              bHasOutputPin = true;
+            }
+            pP->Release();
+            if (bHasOutputPin) break; 
+          }
+          pEnum->Release();
+        }
+        pinInfo.pFilter->Release();
+
+        // 出力ピンを持っている場合（＝レンダラーではない）、接続を拒否
+        if (bHasOutputPin) {
+          return E_FAIL;
+        }
+      }
+    }
+  }
+
+  return S_OK;
+}
+
+//------------------------------------------------------------------------------
+// Settings Implementation (Connection Restrictions)
+//------------------------------------------------------------------------------
+STDMETHODIMP CLR2BGAFilter::GetOnlyOutputToLR2(BOOL *pEnabled) {
+  CheckPointer(pEnabled, E_POINTER);
+  m_pSettings->Lock();
+  *pEnabled = m_pSettings->m_onlyOutputToLR2 ? TRUE : FALSE;
+  m_pSettings->Unlock();
+  return S_OK;
+}
+
+STDMETHODIMP CLR2BGAFilter::SetOnlyOutputToLR2(BOOL enabled) {
+  m_pSettings->Lock();
+  m_pSettings->m_onlyOutputToLR2 = (enabled != FALSE);
+  m_pSettings->Unlock();
+  m_pSettings->Save();
+  return S_OK;
+}
+
+STDMETHODIMP CLR2BGAFilter::GetOnlyOutputToRenderer(BOOL *pEnabled) {
+  CheckPointer(pEnabled, E_POINTER);
+  m_pSettings->Lock();
+  *pEnabled = m_pSettings->m_onlyOutputToRenderer ? TRUE : FALSE;
+  m_pSettings->Unlock();
+  return S_OK;
+}
+
+STDMETHODIMP CLR2BGAFilter::SetOnlyOutputToRenderer(BOOL enabled) {
+  m_pSettings->Lock();
+  m_pSettings->m_onlyOutputToRenderer = (enabled != FALSE);
+  m_pSettings->Unlock();
+  m_pSettings->Save();
+  return S_OK;
+}
+
+
 
 //------------------------------------------------------------------------------
 // StartStreaming - ストリーミング開始

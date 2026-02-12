@@ -116,6 +116,10 @@ public:
     bool m_keyboardCloseEnabled;    // キーボードキーで閉じる
     int m_keyboardKeyCode;          // 仮想キーコード
 
+    // 接続制限設定 (Connection Restrictions)
+    bool m_onlyOutputToLR2;         // プロセス名に body を含む場合のみ接続許可 (デフォルトON)
+    bool m_onlyOutputToRenderer;    // レンダラー（出力ピンなし）への接続のみ許可 (デフォルトON)
+
     void SetCloseOnResult(bool b) { Lock(); m_closeOnResult = b; Unlock(); }
     void GetCloseOnResult(bool* b) { Lock(); if(b) *b = m_closeOnResult; Unlock(); }
 

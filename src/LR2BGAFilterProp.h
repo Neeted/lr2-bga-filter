@@ -119,5 +119,9 @@ private:
   int m_gamepadButtonID;
   BOOL m_keyboardCloseEnabled;
   int m_keyboardKeyCode;
+
+  // Connection Restrictions
+  BOOL m_onlyOutputToLR2;
+  BOOL m_onlyOutputToRenderer;
 };
 

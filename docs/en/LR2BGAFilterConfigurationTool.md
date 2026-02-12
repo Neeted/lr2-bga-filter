@@ -63,6 +63,8 @@ Supports cropping to 16:9 and 4:3.
 
 - [ ] Debug Mode (Info Window): Display debug window during video playback. You can check gamepad button numbers and key codes.
 - [ ] Auto Open Properties: Automatically open settings screen during video playback. Useful for initial setup.
+- [ ] Only output to LR2: Allows connection only if the connecting process name contains "body". Enabled by default. Disabling this allows using the filter from external tools like GraphStudioNext, but may cause unexpected behavior.
+- [ ] Only output to renderer: Allows connection only if the destination filter is a renderer (has no output pins). Enabled by default. Disabling this allows connecting another filter downstream.
 
 ## Supplementary Notes
 
