@@ -59,7 +59,9 @@ void LR2BGATransformLogic::StartStreaming(int inputWidth, int inputHeight, int i
     m_activePassthrough = isSizeSame && !m_pSettings->m_keepAspectRatio;
 
     // ダミーモード
-    m_activeDummy = (inputWidth == 0 || inputHeight == 0); // 入力がない場合など
+    // 設定で有効化された場合を正とし、入力不正(0x0)時もフェイルセーフで有効化する
+    m_activeDummy = (m_pSettings && m_pSettings->m_dummyMode) ||
+                    (inputWidth == 0 || inputHeight == 0);
 
     // 状態リセット
     m_lastOutputTime = 0;

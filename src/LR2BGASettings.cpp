@@ -101,8 +101,6 @@ void LR2BGASettings::Load()
         if (RegQueryValueExW(hKey, L"LetterboxThreshold", NULL, NULL, (LPBYTE)&data, &size) == ERROR_SUCCESS) m_lbThreshold = (int)data;
         if (RegQueryValueExW(hKey, L"LetterboxStability", NULL, NULL, (LPBYTE)&data, &size) == ERROR_SUCCESS) m_lbStability = (int)data;
 
-        if (RegQueryValueExW(hKey, L"LetterboxStability", NULL, NULL, (LPBYTE)&data, &size) == ERROR_SUCCESS) m_lbStability = (int)data;
-        
         // 手動クローズトリガー
         if (RegQueryValueExW(hKey, L"CloseOnRightClick", NULL, NULL, (LPBYTE)&data, &size) == ERROR_SUCCESS) m_closeOnRightClick = (data != 0);
         if (RegQueryValueExW(hKey, L"CloseOnResult", NULL, NULL, (LPBYTE)&data, &size) == ERROR_SUCCESS) m_closeOnResult = (data != 0);
