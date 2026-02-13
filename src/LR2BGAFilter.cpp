@@ -136,12 +136,17 @@ CLR2BGAFilter::CLR2BGAFilter(LPUNKNOWN pUnk, HRESULT *phr)
       m_pTransformLogic(new LR2BGATransformLogic(NULL, NULL)),
       // 入力情報初期化
       m_inputWidth(0), m_inputHeight(0), m_inputBitCount(0),
+      // ラッチ設定初期化
+      m_activePassthrough(false), m_activeDummy(false),
+      m_activeWidth(0), m_activeHeight(0),
       // 統計情報初期化
       m_frameCount(0), m_processedFrameCount(0), m_inputFrameCount(0),
       m_totalProcessTime(0), m_avgProcessTime(0.0),
-      m_frameRate(0.0), m_outputFrameRate(0.0),
+      m_frameRate(0.0), m_outputFrameRate(0.0), m_qpcFrequency({0}),
       m_pMemoryMonitor(std::make_unique<LR2MemoryMonitor>())
 {
+  QueryPerformanceFrequency(&m_qpcFrequency);
+
   // 設定マネージャ初期化
   m_pSettings = new LR2BGASettings();
   m_pSettings->Load();
@@ -877,6 +882,10 @@ HRESULT CLR2BGAFilter::StartStreaming() {
     outHeight = m_pSettings->m_outputHeight;
   }
 
+  // Transform用にサイズをラッチ (毎フレームのMediaType取得を回避)
+  m_activeWidth = outWidth;
+  m_activeHeight = outHeight;
+
   // TransformLogic開始
   m_pTransformLogic->StartStreaming(m_inputWidth, m_inputHeight, m_inputBitCount,
                                     outWidth, outHeight);
@@ -1111,8 +1120,10 @@ HRESULT CLR2BGAFilter::Transform(IMediaSample *pIn, IMediaSample *pOut) {
   pIn->GetTime(&rtStart, &rtEnd);
 
   // パフォーマンス計測
-  LARGE_INTEGER startTime, endTime, freq;
-  QueryPerformanceFrequency(&freq);
+  LARGE_INTEGER startTime, endTime, freq = m_qpcFrequency;
+  if (freq.QuadPart <= 0) {
+    QueryPerformanceFrequency(&freq); // フェイルセーフ
+  }
   QueryPerformanceCounter(&startTime);
 
   // 必要であればデバッグウィンドウや外部ウィンドウを表示
@@ -1128,29 +1139,38 @@ HRESULT CLR2BGAFilter::Transform(IMediaSample *pIn, IMediaSample *pOut) {
   hr = pOut->GetPointer(&pDstData);
   if (FAILED(hr)) return hr;
 
-  // フォーマット取得
-  CMediaType mtIn;
-  m_pInput->ConnectionMediaType(&mtIn);
+  // フォーマットは接続時/開始時に確定した値を使用 (毎フレームのMediaType取得を回避)
+  int srcWidth = m_inputWidth;
+  int srcHeight = m_inputHeight;
+  int srcBitCount = m_inputBitCount;
 
-  int srcWidth, srcHeight, srcBitCount;
-  if (mtIn.formattype == FORMAT_VideoInfo2) {
-    VIDEOINFOHEADER2 *pvi2In = (VIDEOINFOHEADER2 *)mtIn.Format();
-    srcWidth = pvi2In->bmiHeader.biWidth;
-    srcHeight = abs(pvi2In->bmiHeader.biHeight);
-    srcBitCount = pvi2In->bmiHeader.biBitCount;
-  } else {
-    VIDEOINFOHEADER *pviIn = (VIDEOINFOHEADER *)mtIn.Format();
-    srcWidth = pviIn->bmiHeader.biWidth;
-    srcHeight = abs(pviIn->bmiHeader.biHeight);
-    srcBitCount = pviIn->bmiHeader.biBitCount;
+  // フェイルセーフ: 何らかの理由でキャッシュが未初期化の場合のみ取得
+  if (srcWidth <= 0 || srcHeight <= 0 || srcBitCount <= 0) {
+    CMediaType mtIn;
+    m_pInput->ConnectionMediaType(&mtIn);
+    if (mtIn.formattype == FORMAT_VideoInfo2) {
+      VIDEOINFOHEADER2 *pvi2In = (VIDEOINFOHEADER2 *)mtIn.Format();
+      srcWidth = pvi2In->bmiHeader.biWidth;
+      srcHeight = abs(pvi2In->bmiHeader.biHeight);
+      srcBitCount = pvi2In->bmiHeader.biBitCount;
+    } else {
+      VIDEOINFOHEADER *pviIn = (VIDEOINFOHEADER *)mtIn.Format();
+      srcWidth = pviIn->bmiHeader.biWidth;
+      srcHeight = abs(pviIn->bmiHeader.biHeight);
+      srcBitCount = pviIn->bmiHeader.biBitCount;
+    }
   }
   int srcStride = ((srcWidth * (srcBitCount / 8) + 3) & ~3);
 
-  CMediaType mtOut;
-  m_pOutput->ConnectionMediaType(&mtOut);
-  VIDEOINFOHEADER *pviOut = (VIDEOINFOHEADER *)mtOut.Format();
-  int dstWidth = pviOut->bmiHeader.biWidth;
-  int dstHeight = abs(pviOut->bmiHeader.biHeight);
+  int dstWidth = m_activeWidth;
+  int dstHeight = m_activeHeight;
+  if (dstWidth <= 0 || dstHeight <= 0) {
+    CMediaType mtOut;
+    m_pOutput->ConnectionMediaType(&mtOut);
+    VIDEOINFOHEADER *pviOut = (VIDEOINFOHEADER *)mtOut.Format();
+    dstWidth = pviOut->bmiHeader.biWidth;
+    dstHeight = abs(pviOut->bmiHeader.biHeight);
+  }
   int dstStride = ((dstWidth * 3 + 3) & ~3);
 
   // -------------------------------------------------------------------------

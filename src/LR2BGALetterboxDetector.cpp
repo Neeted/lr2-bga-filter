@@ -334,7 +334,7 @@ bool LR2BGALetterboxDetector::IsContentAreaDark(const BYTE *pBuffer,
   if (outRatio)
     *outRatio = ratio;
 
-  // 90%以上が黒ければ「暗い」とみなす
+  // 50%超が黒ければ「暗い」とみなす
   return ratio > 0.50f;
 }
 

@@ -411,6 +411,7 @@ public:
   double m_avgProcessTime;     // 平均処理時間 (ms)
   double m_frameRate;          // 入力フレームレート
   double m_outputFrameRate;    // 実測出力フレームレート
+  LARGE_INTEGER m_qpcFrequency; // QPC周波数キャッシュ
 
   // 設定モード
   BOOL m_bConfigMode;
