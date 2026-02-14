@@ -1120,6 +1120,11 @@ HRESULT CLR2BGAFilter::StartStreaming() {
     m_pWindow->ShowExternalWindow();
   }
 
+  // デバッグモードが有効な場合、デバッグウィンドウを表示する
+  if (m_pSettings->m_debugMode && m_pWindow) {
+    m_pWindow->ShowDebugWindow();
+  }
+
   // 出力サイズの決定 (SetMediaType と同じロジック)
   int outWidth, outHeight;
   if (m_pSettings->m_dummyMode) {
@@ -1261,8 +1266,9 @@ HRESULT CLR2BGAFilter::GetMediaType(int iPosition, CMediaType *pMediaType) {
   // 設定に基づいて出力サイズを決定
   // 注意:
   // バッファサイズの問題を防ぐため、StartStreaming/Transformのラッチロジックと一致させる必要があります
-  // GetMediaType は StartStreaming の前、接続時に呼ばれるため、ここでは
-  // m_pSettings を直接使用します。
+  // GetMediaType は StartStreaming の前、接続時に呼ばれるため、ここではm_pSettings を直接使用します。
+  // なお、m_inputWidth/m_inputHeight/m_inputBitCount の確定は StartStreaming の責務です。
+  // GetMediaType は出力メディアタイプ提案のみを行い、入力キャッシュ確定は行いません。
   int outWidth, outHeight;
   if (m_pSettings->m_dummyMode) {
     outWidth = 1;
@@ -1352,13 +1358,13 @@ HRESULT CLR2BGAFilter::DecideBufferSize(IMemAllocator *pAlloc,
 //   2.5 入出力フォーマットの決定
 //      - StartStreaming で確定したキャッシュ値
 //        (m_inputWidth/m_inputHeight/m_inputBitCount, m_activeWidth/m_activeHeight) を使用
-//   3. 黒帯検出 (Auto Letterbox Removal)
+//   3. FPS制限判定
+//      - 入力タイムスタンプに同期しつつ、上限を超えるフレームを「出力のみ」ドロップ判定します。
+//   4. 黒帯検出 (Auto Letterbox Removal)
 //      - 負荷軽減のため、一定間隔 (200ms) で別スレッドに解析を依頼します。
 //      - 検出結果 (m_currentLBMode) に基づき、切り出し範囲 (srcRect)
 //      を決定します。
-//   4. 外部ウィンドウの更新 (プレビュー機能)
-//   5. FPS制限
-//      - 設定された上限FPSを超えないように、必要に応じて Sleep で待機します。
+//   5. 外部ウィンドウの更新 (プレビュー機能)
 //   6. 画像変換 (以下のいずれか)
 //      - ダミーモード: 黒画面または静止画を出力
 //      - パススルー: 入力をそのままコピー
@@ -1383,11 +1389,6 @@ HRESULT CLR2BGAFilter::Transform(IMediaSample *pIn, IMediaSample *pOut) {
     QueryPerformanceFrequency(&freq); // フェイルセーフ
   }
   QueryPerformanceCounter(&startTime);
-
-  // 必要であればデバッグウィンドウや外部ウィンドウを表示
-  if (m_pSettings->m_debugMode && m_frameCount == 0) {
-    m_pWindow->ShowDebugWindow();
-  }
 
   BYTE *pSrcData;
   HRESULT hr = pIn->GetPointer(&pSrcData);
@@ -1414,12 +1415,26 @@ HRESULT CLR2BGAFilter::Transform(IMediaSample *pIn, IMediaSample *pOut) {
   int dstStride = ((dstWidth * 3 + 3) & ~3);
 
   // -------------------------------------------------------------------------
+  // FPS制限 (Delegated to TransformLogic)
+  // ここで時間同期とドロップ判定を行う。ドロップ時でも外部ウィンドウ更新は継続する。
+  // -------------------------------------------------------------------------
+  hr = m_pTransformLogic->WaitFPSLimit(rtStart, rtEnd);
+  if (FAILED(hr)) {
+    return hr;
+  }
+  const bool dropByFPS = (hr == S_FALSE);
+
+  // WaitFPSLimit 内部の待機時間を除外して計測するため、ここで計測開始点を更新
+  QueryPerformanceCounter(&startTime);
+
+  // -------------------------------------------------------------------------
   // 黒帯除去ロジック (Delegated to TransformLogic)
   // -------------------------------------------------------------------------
   RECT srcRect = {0, 0, srcWidth, srcHeight};
   RECT *pSrcRect = NULL;
-  
-  m_pTransformLogic->ProcessLetterboxDetection(pSrcData, pIn->GetActualDataLength(), srcWidth, srcHeight, srcStride, srcBitCount, srcRect, pSrcRect);
+  m_pTransformLogic->ProcessLetterboxDetection(
+      pSrcData, pIn->GetActualDataLength(), srcWidth, srcHeight, srcStride,
+      srcBitCount, srcRect, pSrcRect);
 
   // -------------------------------------------------------------------------
   // 外部ウィンドウ更新
@@ -1432,19 +1447,13 @@ HRESULT CLR2BGAFilter::Transform(IMediaSample *pIn, IMediaSample *pOut) {
   // デバッグ情報の更新
   UpdateDebugInfo();
 
-  // -------------------------------------------------------------------------
-  // FPS制限 (Delegated to TransformLogic)
-  // -------------------------------------------------------------------------
-  LARGE_INTEGER midTime;
-  QueryPerformanceCounter(&midTime);
-
-  hr = m_pTransformLogic->WaitFPSLimit(rtStart, rtEnd);
-  if (hr == S_FALSE) {
-      // FPS制限でスキップされた場合でも、ここまでの処理時間を記録する
-      // (WaitFPSLimit内のSleep時間は含まない)
+  if (dropByFPS) {
+      // LR2向け出力のみドロップし、外部ウィンドウ更新と時間同期は維持する
+      QueryPerformanceCounter(&endTime);
       m_processedFrameCount++;
-      m_totalProcessTime += (midTime.QuadPart - startTime.QuadPart) * 10000000 / freq.QuadPart;
-      return S_FALSE; // Skip
+      m_totalProcessTime +=
+          (endTime.QuadPart - startTime.QuadPart) * 10000000 / freq.QuadPart;
+      return S_FALSE; // Skip output sample
   }
 
   // -------------------------------------------------------------------------

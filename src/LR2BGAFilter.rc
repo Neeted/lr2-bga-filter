@@ -127,8 +127,8 @@ END
 // Version Info
 //------------------------------------------------------------------------------
 VS_VERSION_INFO VERSIONINFO
-    FILEVERSION 1,0,0,0
-    PRODUCTVERSION 1,0,0,0
+    FILEVERSION 1,0,1,0
+    PRODUCTVERSION 1,0,1,0
     FILEFLAGSMASK 0x3fL
 #ifdef _DEBUG
     FILEFLAGS 0x1L
@@ -145,12 +145,12 @@ BEGIN
         BEGIN
             VALUE "CompanyName", "Manhattan Gaffe"
             VALUE "FileDescription", "High-Quality BGA Filter for LR2"
-            VALUE "FileVersion", "1.0.0.0"
+            VALUE "FileVersion", "1.0.1.0"
             VALUE "InternalName", "LR2BGAFilter.ax"
             VALUE "LegalCopyright", "Copyright (C) 2026 Manhattan Gaffe"
             VALUE "OriginalFilename", "LR2BGAFilter.ax"
             VALUE "ProductName", "LR2 BGA Filter"
-            VALUE "ProductVersion", "1.0.0.0"
+            VALUE "ProductVersion", "1.0.1.0"
         END
     END
     BLOCK "VarFileInfo"

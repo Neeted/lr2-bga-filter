@@ -130,7 +130,12 @@ private:
 
     // FPS制限
     REFERENCE_TIME m_lastOutputTime;
+    REFERENCE_TIME m_lastOutputWallclockTime;
+    REFERENCE_TIME m_timelineBaseInputTime;
+    REFERENCE_TIME m_timelineBaseWallclockTime;
     LONGLONG m_droppedFrames;
+    bool m_timelineBaseInitialized;
+    bool m_loggedTimestampFallback;
 
     // ダミーモード状態
     bool m_dummySent;
