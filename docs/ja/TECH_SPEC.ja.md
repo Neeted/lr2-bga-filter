@@ -96,7 +96,7 @@ flowchart LR
 ## 7. データフロー仕様
 ### 7.1 Transformフロー
 1. 入力サンプル取得 (`pIn`)
-2. 入出力フォーマット解釈（幅/高/stride/bpp）
+2. 入出力フォーマット解釈（StartStreamingで確定したキャッシュ値を使用）
 3. 黒帯検出依頼（200ms間隔）
 4. 外部ウィンドウ更新（有効時）
 5. FPS制限判定（超過時 `S_FALSE`）
@@ -338,10 +338,16 @@ sequenceDiagram
 ### 15.3 デバッグUI
 - 表示: 入出力情報、グラフ情報、統計、黒帯判定詳細
 - 操作: `Copy Info`, `Open Settings`
+- `m_debugMode=true` の場合、DebugView (`OutputDebugString`) にも以下を出力する:
+- 下流ピン情報（フィルタ名、CLSID、モジュールパス）
+- `EnumMediaTypes` 列挙結果（件数、終了HRESULTを含む）
+- `QueryAccept` プローブ結果（代表フォーマットの受理/拒否）
+- 接続確定後の最終合意MediaType（`NegotiatedOutput`）
 
 ## 16. 例外・障害時動作
 - 入力メディア型不一致: `VFW_E_TYPE_NOT_ACCEPTED`
 - 設定値不正: `E_INVALIDARG`
+- ストリーミング前提不成立（未接続/未初期化キャッシュ）: `E_UNEXPECTED`
 - FPS制限ドロップ: `Transform` は `S_FALSE`
 - 黒帯検出不能: `LB_MODE_ORIGINAL` 維持
 - 非LR2プロセスでのメモリ監視: 無効化して継続
@@ -349,6 +355,7 @@ sequenceDiagram
 ### 16.1 エラーコード運用方針
 - `VFW_E_TYPE_NOT_ACCEPTED`: MediaType/Transform交渉不一致で使用する。
 - `E_INVALIDARG`: セッターAPIへの範囲外入力で使用する。
+- `E_UNEXPECTED`: StartStreamingで確定されるべき接続/キャッシュ前提が満たされない場合に使用する。
 - `S_FALSE`: Transform継続不能ではなく「意図したスキップ」（FPS制限、dummy継続）で使用する。
 - `E_FAIL`: 接続制約違反（Pin接続拒否など）で使用する。
 

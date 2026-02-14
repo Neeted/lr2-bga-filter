@@ -10,6 +10,7 @@
 #include "LR2MemoryMonitor.h"
 #include <dvdmedia.h>
 #include <tlhelp32.h>
+#include <string>
 
 //------------------------------------------------------------------------------
 // 定数定義 (Constants)
@@ -17,6 +18,162 @@
 //------------------------------------------------------------------------------
 constexpr DWORD kLetterboxCheckIntervalMs = 200;  // 黒帯検出の頻度制限 (ms)
 constexpr DWORD kMaxSleepMs = 1000;               // FPS制限用Sleep上限 (ms)
+
+namespace {
+std::wstring GuidToString(const GUID& guid) {
+  wchar_t buf[64] = {0};
+  StringFromGUID2(guid, buf, static_cast<int>(_countof(buf)));
+  return std::wstring(buf);
+}
+
+GUID GuidFromFourCC(DWORD fourcc) {
+  GUID g = {0};
+  g.Data1 = fourcc;
+  g.Data2 = 0x0000;
+  g.Data3 = 0x0010;
+  g.Data4[0] = 0x80;
+  g.Data4[1] = 0x00;
+  g.Data4[2] = 0x00;
+  g.Data4[3] = 0xAA;
+  g.Data4[4] = 0x00;
+  g.Data4[5] = 0x38;
+  g.Data4[6] = 0x9B;
+  g.Data4[7] = 0x71;
+  return g;
+}
+
+void LogRendererModuleByClsid(const CLSID& clsid) {
+  std::wstring clsidStr = GuidToString(clsid);
+  std::wstring keyPath = L"CLSID\\";
+  keyPath += clsidStr;
+  keyPath += L"\\InprocServer32";
+
+  HKEY hKey = NULL;
+  if (RegOpenKeyExW(HKEY_CLASSES_ROOT, keyPath.c_str(), 0, KEY_READ, &hKey) != ERROR_SUCCESS) {
+    wchar_t msg[256];
+    swprintf_s(msg, L"[LR2BGAFilter] Renderer CLSID=%s (InprocServer32 lookup failed)\n",
+               clsidStr.c_str());
+    OutputDebugStringW(msg);
+    return;
+  }
+
+  wchar_t modulePath[MAX_PATH] = {0};
+  DWORD type = 0;
+  DWORD cb = sizeof(modulePath);
+  LONG q = RegQueryValueExW(hKey, NULL, NULL, &type, reinterpret_cast<LPBYTE>(modulePath), &cb);
+  RegCloseKey(hKey);
+
+  if (q == ERROR_SUCCESS && (type == REG_SZ || type == REG_EXPAND_SZ)) {
+    wchar_t msg[1024];
+    swprintf_s(msg, L"[LR2BGAFilter] Renderer CLSID=%s module=%s\n", clsidStr.c_str(), modulePath);
+    OutputDebugStringW(msg);
+  } else {
+    wchar_t msg[256];
+    swprintf_s(msg, L"[LR2BGAFilter] Renderer CLSID=%s (module path unavailable)\n",
+               clsidStr.c_str());
+    OutputDebugStringW(msg);
+  }
+}
+
+struct QueryAcceptProbe {
+  const wchar_t* name;
+  GUID subtype;
+  DWORD biCompression;
+  WORD bitCount;
+  int bytesPerPixelNum; // numerator
+  int bytesPerPixelDen; // denominator
+};
+
+void ProbeQueryAccept(IPin* pDownstreamPin, LONG width, LONG height) {
+  if (!pDownstreamPin || width <= 0 || height <= 0) return;
+
+  const GUID yuy2 = GuidFromFourCC(MAKEFOURCC('Y', 'U', 'Y', '2'));
+  const GUID uyvy = GuidFromFourCC(MAKEFOURCC('U', 'Y', 'V', 'Y'));
+  const GUID yv12 = GuidFromFourCC(MAKEFOURCC('Y', 'V', '1', '2'));
+  const GUID nv12 = GuidFromFourCC(MAKEFOURCC('N', 'V', '1', '2'));
+
+  const QueryAcceptProbe probes[] = {
+      {L"RGB24", MEDIASUBTYPE_RGB24, BI_RGB, 24, 3, 1},
+      {L"RGB32", MEDIASUBTYPE_RGB32, BI_RGB, 32, 4, 1},
+      {L"YUY2", yuy2, MAKEFOURCC('Y', 'U', 'Y', '2'), 16, 2, 1},
+      {L"UYVY", uyvy, MAKEFOURCC('U', 'Y', 'V', 'Y'), 16, 2, 1},
+      {L"YV12", yv12, MAKEFOURCC('Y', 'V', '1', '2'), 12, 3, 2},
+      {L"NV12", nv12, MAKEFOURCC('N', 'V', '1', '2'), 12, 3, 2},
+  };
+
+  for (const auto& p : probes) {
+    VIDEOINFOHEADER vih = {};
+    vih.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+    vih.bmiHeader.biWidth = width;
+    vih.bmiHeader.biHeight = height;
+    vih.bmiHeader.biPlanes = 1;
+    vih.bmiHeader.biBitCount = p.bitCount;
+    vih.bmiHeader.biCompression = p.biCompression;
+    LONG stride = ((width * p.bytesPerPixelNum / p.bytesPerPixelDen) + 3) & ~3;
+    vih.bmiHeader.biSizeImage = stride * abs(height);
+
+    AM_MEDIA_TYPE mt = {};
+    mt.majortype = MEDIATYPE_Video;
+    mt.subtype = p.subtype;
+    mt.formattype = FORMAT_VideoInfo;
+    mt.bFixedSizeSamples = TRUE;
+    mt.bTemporalCompression = FALSE;
+    mt.lSampleSize = vih.bmiHeader.biSizeImage;
+    mt.cbFormat = sizeof(VIDEOINFOHEADER);
+    mt.pbFormat = reinterpret_cast<BYTE*>(&vih);
+
+    HRESULT hr = pDownstreamPin->QueryAccept(&mt);
+
+    const wchar_t* verdict = (hr == S_OK) ? L"accepted"
+                           : (hr == S_FALSE) ? L"rejected"
+                                             : L"error";
+    wchar_t line[512];
+    swprintf_s(line, L"[LR2BGAFilter] QueryAccept %-5s => hr=0x%08X (%s)\n",
+               p.name, static_cast<unsigned int>(hr), verdict);
+    OutputDebugStringW(line);
+  }
+}
+
+void LogMediaTypeDebug(const AM_MEDIA_TYPE* pmt, const wchar_t* context, int index = -1) {
+  if (!pmt) return;
+
+  std::wstring major = GuidToString(pmt->majortype);
+  std::wstring sub = GuidToString(pmt->subtype);
+  std::wstring fmt = GuidToString(pmt->formattype);
+
+  long w = 0, h = 0;
+  WORD bit = 0;
+  REFERENCE_TIME atpf = 0;
+
+  if (pmt->formattype == FORMAT_VideoInfo && pmt->pbFormat &&
+      pmt->cbFormat >= sizeof(VIDEOINFOHEADER)) {
+    const VIDEOINFOHEADER* pvi = reinterpret_cast<const VIDEOINFOHEADER*>(pmt->pbFormat);
+    w = pvi->bmiHeader.biWidth;
+    h = pvi->bmiHeader.biHeight;
+    bit = pvi->bmiHeader.biBitCount;
+    atpf = pvi->AvgTimePerFrame;
+  } else if (pmt->formattype == FORMAT_VideoInfo2 && pmt->pbFormat &&
+             pmt->cbFormat >= sizeof(VIDEOINFOHEADER2)) {
+    const VIDEOINFOHEADER2* pvi2 = reinterpret_cast<const VIDEOINFOHEADER2*>(pmt->pbFormat);
+    w = pvi2->bmiHeader.biWidth;
+    h = pvi2->bmiHeader.biHeight;
+    bit = pvi2->bmiHeader.biBitCount;
+    atpf = pvi2->AvgTimePerFrame;
+  }
+
+  wchar_t line[1024];
+  if (index >= 0) {
+    swprintf_s(line, L"[LR2BGAFilter] %s[%d] major=%s subtype=%s format=%s size=%ldx%ld bit=%u AvgTimePerFrame=%lld\n",
+               context, index, major.c_str(), sub.c_str(), fmt.c_str(),
+               w, h, bit, atpf);
+  } else {
+    swprintf_s(line, L"[LR2BGAFilter] %s major=%s subtype=%s format=%s size=%ldx%ld bit=%u AvgTimePerFrame=%lld\n",
+               context, major.c_str(), sub.c_str(), fmt.c_str(),
+               w, h, bit, atpf);
+  }
+  OutputDebugStringW(line);
+}
+} // namespace
 
 //------------------------------------------------------------------------------
 // フィルタ情報 (Filter Information)
@@ -767,6 +924,72 @@ HRESULT CLR2BGAOutputPin::CheckConnect(IPin *pPin) {
 
   CLR2BGAFilter* pFilter = static_cast<CLR2BGAFilter*>(m_pTransformFilter);
   LR2BGASettings* pSettings = pFilter->m_pSettings;
+  const bool debugEnabled = (pSettings && pSettings->m_debugMode);
+
+  if (debugEnabled) {
+    // Debug: 下流ピンが受け入れるMediaType候補を列挙
+    PIN_INFO pinInfoDbg = {0};
+    if (SUCCEEDED(pPin->QueryPinInfo(&pinInfoDbg))) {
+      wchar_t filterName[128] = L"(unknown)";
+      if (pinInfoDbg.pFilter) {
+        FILTER_INFO fi = {0};
+        if (SUCCEEDED(pinInfoDbg.pFilter->QueryFilterInfo(&fi))) {
+          wcsncpy_s(filterName, fi.achName, _TRUNCATE);
+          if (fi.pGraph) fi.pGraph->Release();
+        }
+        CLSID clsid = CLSID_NULL;
+        if (SUCCEEDED(pinInfoDbg.pFilter->GetClassID(&clsid))) {
+          std::wstring clsidStr = GuidToString(clsid);
+          wchar_t cmsg[256];
+          swprintf_s(cmsg, L"[LR2BGAFilter] Downstream filter CLSID=%s\n", clsidStr.c_str());
+          OutputDebugStringW(cmsg);
+          LogRendererModuleByClsid(clsid);
+        }
+      }
+      wchar_t info[512];
+      swprintf_s(info, L"[LR2BGAFilter] CheckConnect downstream pin=%s filter=%s\n",
+                 pinInfoDbg.achName, filterName);
+      OutputDebugStringW(info);
+      if (pinInfoDbg.pFilter) pinInfoDbg.pFilter->Release();
+    }
+    IEnumMediaTypes* pEnumMT = NULL;
+    HRESULT hrEnum = pPin->EnumMediaTypes(&pEnumMT);
+    if (SUCCEEDED(hrEnum) && pEnumMT) {
+      wchar_t startMsg[256];
+      swprintf_s(startMsg, L"[LR2BGAFilter] EnumMediaTypes started hr=0x%08X\n",
+                 static_cast<unsigned int>(hrEnum));
+      OutputDebugStringW(startMsg);
+
+      AM_MEDIA_TYPE* pmt = NULL;
+      int idx = 0;
+      HRESULT hrNext = S_OK;
+      while ((hrNext = pEnumMT->Next(1, &pmt, NULL)) == S_OK) {
+        LogMediaTypeDebug(pmt, L"DownstreamAccept", idx++);
+        DeleteMediaType(pmt);
+        pmt = NULL;
+      }
+
+      if (idx == 0) {
+        OutputDebugStringW(L"[LR2BGAFilter] EnumMediaTypes returned 0 entries.\n");
+      }
+      wchar_t endMsg[256];
+      swprintf_s(endMsg, L"[LR2BGAFilter] EnumMediaTypes finished count=%d hr=0x%08X\n",
+                 idx, static_cast<unsigned int>(hrNext));
+      OutputDebugStringW(endMsg);
+
+      pEnumMT->Release();
+    } else {
+      wchar_t failMsg[256];
+      swprintf_s(failMsg, L"[LR2BGAFilter] CheckConnect: EnumMediaTypes unavailable hr=0x%08X\n",
+                 static_cast<unsigned int>(hrEnum));
+      OutputDebugStringW(failMsg);
+    }
+
+    // Debug: QueryAcceptで代表フォーマット受理可否をプローブ
+    LONG probeW = pFilter->m_pSettings ? pFilter->m_pSettings->m_outputWidth : 256;
+    LONG probeH = pFilter->m_pSettings ? pFilter->m_pSettings->m_outputHeight : 256;
+    ProbeQueryAccept(pPin, probeW, probeH);
+  }
 
   // 1. プロセス名チェック (Only output to LR2)
   if (pSettings->m_onlyOutputToLR2) {
@@ -858,6 +1081,35 @@ STDMETHODIMP CLR2BGAFilter::SetOnlyOutputToRenderer(BOOL enabled) {
 // StartStreaming - ストリーミング開始
 //------------------------------------------------------------------------------
 HRESULT CLR2BGAFilter::StartStreaming() {
+  // 入力フォーマットをここで確定（Transformで参照するキャッシュ）
+  if (m_pInput->IsConnected() == FALSE) {
+    return E_UNEXPECTED;
+  }
+  CMediaType mtIn;
+  HRESULT hrIn = m_pInput->ConnectionMediaType(&mtIn);
+  if (FAILED(hrIn)) {
+    return hrIn;
+  }
+  if (FAILED(CheckInputType(&mtIn))) {
+    return VFW_E_TYPE_NOT_ACCEPTED;
+  }
+
+  REFERENCE_TIME avgTimePerFrame = 0;
+  if (mtIn.formattype == FORMAT_VideoInfo2) {
+    VIDEOINFOHEADER2 *pvi2In = (VIDEOINFOHEADER2 *)mtIn.Format();
+    m_inputWidth = pvi2In->bmiHeader.biWidth;
+    m_inputHeight = abs(pvi2In->bmiHeader.biHeight);
+    m_inputBitCount = pvi2In->bmiHeader.biBitCount;
+    avgTimePerFrame = pvi2In->AvgTimePerFrame;
+  } else {
+    VIDEOINFOHEADER *pviIn = (VIDEOINFOHEADER *)mtIn.Format();
+    m_inputWidth = pviIn->bmiHeader.biWidth;
+    m_inputHeight = abs(pviIn->bmiHeader.biHeight);
+    m_inputBitCount = pviIn->bmiHeader.biBitCount;
+    avgTimePerFrame = pviIn->AvgTimePerFrame;
+  }
+  m_frameRate = (avgTimePerFrame > 0) ? (10000000.0 / avgTimePerFrame) : 0.0;
+
   // 設定画面の自動オープン
   if (!m_bConfigMode && m_pSettings->m_autoOpenSettings && m_pWindow) {
     m_pWindow->ShowPropertyPage();
@@ -866,6 +1118,11 @@ HRESULT CLR2BGAFilter::StartStreaming() {
   // 外部ウィンドウが有効な場合、表示する
   if (!m_bConfigMode && m_pSettings->m_extWindowEnabled && m_pWindow) {
     m_pWindow->ShowExternalWindow();
+  }
+
+  // デバッグモードが有効な場合、デバッグウィンドウを表示する
+  if (m_pSettings->m_debugMode && m_pWindow) {
+    m_pWindow->ShowDebugWindow();
   }
 
   // 出力サイズの決定 (SetMediaType と同じロジック)
@@ -896,6 +1153,16 @@ HRESULT CLR2BGAFilter::StartStreaming() {
   // 設定が有効な場合のみスレッドを開始する
   if (m_pMemoryMonitor && m_pSettings->m_closeOnResult) {
       m_pMemoryMonitor->Start();
+  }
+
+  if (m_pSettings && m_pSettings->m_debugMode) {
+    // Debug: 接続確定後の最終出力MediaTypeを記録
+    CMediaType mtOut;
+    if (SUCCEEDED(m_pOutput->ConnectionMediaType(&mtOut))) {
+      LogMediaTypeDebug(static_cast<const AM_MEDIA_TYPE*>(&mtOut), L"NegotiatedOutput");
+    } else {
+      OutputDebugStringW(L"[LR2BGAFilter] StartStreaming: failed to get negotiated output media type.\n");
+    }
   }
 
   return CTransformFilter::StartStreaming();
@@ -977,25 +1244,18 @@ HRESULT CLR2BGAFilter::GetMediaType(int iPosition, CMediaType *pMediaType) {
   int inWidth = 0;
   int inHeight = 0;
   REFERENCE_TIME avgTimePerFrame = 0;
-  int inputBitCount = 0;
 
   if (mtIn.formattype == FORMAT_VideoInfo2) {
     VIDEOINFOHEADER2 *pvi2 = (VIDEOINFOHEADER2 *)mtIn.Format();
     inWidth = pvi2->bmiHeader.biWidth;
     inHeight = abs(pvi2->bmiHeader.biHeight);
     avgTimePerFrame = pvi2->AvgTimePerFrame;
-    inputBitCount = pvi2->bmiHeader.biBitCount;
   } else {
     VIDEOINFOHEADER *pvi = (VIDEOINFOHEADER *)mtIn.Format();
     inWidth = pvi->bmiHeader.biWidth;
     inHeight = abs(pvi->bmiHeader.biHeight);
     avgTimePerFrame = pvi->AvgTimePerFrame;
-    inputBitCount = pvi->bmiHeader.biBitCount;
   }
-
-  m_inputWidth = inWidth;
-  m_inputHeight = inHeight;
-  m_inputBitCount = inputBitCount;
 
   if (avgTimePerFrame > 0) {
     m_frameRate = 10000000.0 / avgTimePerFrame;
@@ -1006,8 +1266,9 @@ HRESULT CLR2BGAFilter::GetMediaType(int iPosition, CMediaType *pMediaType) {
   // 設定に基づいて出力サイズを決定
   // 注意:
   // バッファサイズの問題を防ぐため、StartStreaming/Transformのラッチロジックと一致させる必要があります
-  // GetMediaType は StartStreaming の前、接続時に呼ばれるため、ここでは
-  // m_pSettings を直接使用します。
+  // GetMediaType は StartStreaming の前、接続時に呼ばれるため、ここではm_pSettings を直接使用します。
+  // なお、m_inputWidth/m_inputHeight/m_inputBitCount の確定は StartStreaming の責務です。
+  // GetMediaType は出力メディアタイプ提案のみを行い、入力キャッシュ確定は行いません。
   int outWidth, outHeight;
   if (m_pSettings->m_dummyMode) {
     outWidth = 1;
@@ -1094,13 +1355,16 @@ HRESULT CLR2BGAFilter::DecideBufferSize(IMemAllocator *pAlloc,
 // 処理フロー:
 //   1. パフォーマンス計測開始
 //   2. 入出力バッファのポインタ取得
-//   3. 黒帯検出 (Auto Letterbox Removal)
+//   2.5 入出力フォーマットの決定
+//      - StartStreaming で確定したキャッシュ値
+//        (m_inputWidth/m_inputHeight/m_inputBitCount, m_activeWidth/m_activeHeight) を使用
+//   3. FPS制限判定
+//      - 入力タイムスタンプに同期しつつ、上限を超えるフレームを「出力のみ」ドロップ判定します。
+//   4. 黒帯検出 (Auto Letterbox Removal)
 //      - 負荷軽減のため、一定間隔 (200ms) で別スレッドに解析を依頼します。
 //      - 検出結果 (m_currentLBMode) に基づき、切り出し範囲 (srcRect)
 //      を決定します。
-//   4. 外部ウィンドウの更新 (プレビュー機能)
-//   5. FPS制限
-//      - 設定された上限FPSを超えないように、必要に応じて Sleep で待機します。
+//   5. 外部ウィンドウの更新 (プレビュー機能)
 //   6. 画像変換 (以下のいずれか)
 //      - ダミーモード: 黒画面または静止画を出力
 //      - パススルー: 入力をそのままコピー
@@ -1109,8 +1373,8 @@ HRESULT CLR2BGAFilter::DecideBufferSize(IMemAllocator *pAlloc,
 //   8. 統計情報更新
 //
 // 同期に関する注意:
-//   - 設定値 (m_outputWidth 等) は、ストリーミング開始時にラッチされた値
-//   (m_activeWidth) を使用します。
+//   - 設定値/フォーマット情報は、ストリーミング開始時にラッチされた値
+//     (m_activeWidth/m_activeHeight, m_inputWidth/m_inputHeight/m_inputBitCount) を使用します。
 //     これは、処理中に設定が変更されてバッファオーバーランが発生するのを防ぐためです。
 //------------------------------------------------------------------------------
 HRESULT CLR2BGAFilter::Transform(IMediaSample *pIn, IMediaSample *pOut) {
@@ -1126,11 +1390,6 @@ HRESULT CLR2BGAFilter::Transform(IMediaSample *pIn, IMediaSample *pOut) {
   }
   QueryPerformanceCounter(&startTime);
 
-  // 必要であればデバッグウィンドウや外部ウィンドウを表示
-  if (m_pSettings->m_debugMode && m_frameCount == 0) {
-    m_pWindow->ShowDebugWindow();
-  }
-
   BYTE *pSrcData;
   HRESULT hr = pIn->GetPointer(&pSrcData);
   if (FAILED(hr)) return hr;
@@ -1139,47 +1398,43 @@ HRESULT CLR2BGAFilter::Transform(IMediaSample *pIn, IMediaSample *pOut) {
   hr = pOut->GetPointer(&pDstData);
   if (FAILED(hr)) return hr;
 
-  // フォーマットは接続時/開始時に確定した値を使用 (毎フレームのMediaType取得を回避)
+  // フォーマットは StartStreaming で確定したキャッシュ値を使用
   int srcWidth = m_inputWidth;
   int srcHeight = m_inputHeight;
   int srcBitCount = m_inputBitCount;
-
-  // フェイルセーフ: 何らかの理由でキャッシュが未初期化の場合のみ取得
   if (srcWidth <= 0 || srcHeight <= 0 || srcBitCount <= 0) {
-    CMediaType mtIn;
-    m_pInput->ConnectionMediaType(&mtIn);
-    if (mtIn.formattype == FORMAT_VideoInfo2) {
-      VIDEOINFOHEADER2 *pvi2In = (VIDEOINFOHEADER2 *)mtIn.Format();
-      srcWidth = pvi2In->bmiHeader.biWidth;
-      srcHeight = abs(pvi2In->bmiHeader.biHeight);
-      srcBitCount = pvi2In->bmiHeader.biBitCount;
-    } else {
-      VIDEOINFOHEADER *pviIn = (VIDEOINFOHEADER *)mtIn.Format();
-      srcWidth = pviIn->bmiHeader.biWidth;
-      srcHeight = abs(pviIn->bmiHeader.biHeight);
-      srcBitCount = pviIn->bmiHeader.biBitCount;
-    }
+    return E_UNEXPECTED;
   }
   int srcStride = ((srcWidth * (srcBitCount / 8) + 3) & ~3);
 
   int dstWidth = m_activeWidth;
   int dstHeight = m_activeHeight;
   if (dstWidth <= 0 || dstHeight <= 0) {
-    CMediaType mtOut;
-    m_pOutput->ConnectionMediaType(&mtOut);
-    VIDEOINFOHEADER *pviOut = (VIDEOINFOHEADER *)mtOut.Format();
-    dstWidth = pviOut->bmiHeader.biWidth;
-    dstHeight = abs(pviOut->bmiHeader.biHeight);
+    return E_UNEXPECTED;
   }
   int dstStride = ((dstWidth * 3 + 3) & ~3);
+
+  // -------------------------------------------------------------------------
+  // FPS制限 (Delegated to TransformLogic)
+  // ここで時間同期とドロップ判定を行う。ドロップ時でも外部ウィンドウ更新は継続する。
+  // -------------------------------------------------------------------------
+  hr = m_pTransformLogic->WaitFPSLimit(rtStart, rtEnd);
+  if (FAILED(hr)) {
+    return hr;
+  }
+  const bool dropByFPS = (hr == S_FALSE);
+
+  // WaitFPSLimit 内部の待機時間を除外して計測するため、ここで計測開始点を更新
+  QueryPerformanceCounter(&startTime);
 
   // -------------------------------------------------------------------------
   // 黒帯除去ロジック (Delegated to TransformLogic)
   // -------------------------------------------------------------------------
   RECT srcRect = {0, 0, srcWidth, srcHeight};
   RECT *pSrcRect = NULL;
-  
-  m_pTransformLogic->ProcessLetterboxDetection(pSrcData, pIn->GetActualDataLength(), srcWidth, srcHeight, srcStride, srcBitCount, srcRect, pSrcRect);
+  m_pTransformLogic->ProcessLetterboxDetection(
+      pSrcData, pIn->GetActualDataLength(), srcWidth, srcHeight, srcStride,
+      srcBitCount, srcRect, pSrcRect);
 
   // -------------------------------------------------------------------------
   // 外部ウィンドウ更新
@@ -1192,19 +1447,13 @@ HRESULT CLR2BGAFilter::Transform(IMediaSample *pIn, IMediaSample *pOut) {
   // デバッグ情報の更新
   UpdateDebugInfo();
 
-  // -------------------------------------------------------------------------
-  // FPS制限 (Delegated to TransformLogic)
-  // -------------------------------------------------------------------------
-  LARGE_INTEGER midTime;
-  QueryPerformanceCounter(&midTime);
-
-  hr = m_pTransformLogic->WaitFPSLimit(rtStart, rtEnd);
-  if (hr == S_FALSE) {
-      // FPS制限でスキップされた場合でも、ここまでの処理時間を記録する
-      // (WaitFPSLimit内のSleep時間は含まない)
+  if (dropByFPS) {
+      // LR2向け出力のみドロップし、外部ウィンドウ更新と時間同期は維持する
+      QueryPerformanceCounter(&endTime);
       m_processedFrameCount++;
-      m_totalProcessTime += (midTime.QuadPart - startTime.QuadPart) * 10000000 / freq.QuadPart;
-      return S_FALSE; // Skip
+      m_totalProcessTime +=
+          (endTime.QuadPart - startTime.QuadPart) * 10000000 / freq.QuadPart;
+      return S_FALSE; // Skip output sample
   }
 
   // -------------------------------------------------------------------------

@@ -22,7 +22,12 @@ LR2BGATransformLogic::LR2BGATransformLogic(LR2BGASettings* pSettings, LR2BGAWind
       m_lbBpp(0),
       m_lastLBRequestTime(0),
       m_lastOutputTime(0),
+      m_lastOutputWallclockTime(0),
+      m_timelineBaseInputTime(0),
+      m_timelineBaseWallclockTime(0),
       m_droppedFrames(0),
+      m_timelineBaseInitialized(false),
+      m_loggedTimestampFallback(false),
       m_dummySent(false),
       m_lastDummyTime(0),
       m_activePassthrough(false),
@@ -65,7 +70,12 @@ void LR2BGATransformLogic::StartStreaming(int inputWidth, int inputHeight, int i
 
     // 状態リセット
     m_lastOutputTime = 0;
+    m_lastOutputWallclockTime = 0;
+    m_timelineBaseInputTime = 0;
+    m_timelineBaseWallclockTime = 0;
     m_droppedFrames = 0;
+    m_timelineBaseInitialized = false;
+    m_loggedTimestampFallback = false;
     m_dummySent = false;
     m_lastDummyTime = 0;
 
@@ -276,7 +286,8 @@ LetterboxMode LR2BGATransformLogic::GetCurrentLetterboxMode() const {
 //
 // 役割:
 //   設定された最大FPS (m_maxFPS) を超えないように制御します。
-//   前回出力時刻からの経過時間をチェックし、必要に応じて Sleep で待機します。
+//   入力タイムスタンプを壁時計へ同期し、グラフ進行を実時間へ合わせます。
+//   その上で、前回採用フレームとの差分に応じて超過分のみドロップします。
 //
 // 戻り値:
 //   S_OK    : 処理続行 (FPS制限内、または制限なし)
@@ -287,19 +298,73 @@ HRESULT LR2BGATransformLogic::WaitFPSLimit(REFERENCE_TIME rtStart, REFERENCE_TIM
         return S_OK;
     }
 
-    REFERENCE_TIME minInterval = 10000000LL / m_pSettings->m_maxFPS;
-    if (m_lastOutputTime > 0 && (rtStart - m_lastOutputTime) < minInterval) {
-        DWORD waitMs = 0;
-        if (rtEnd > rtStart) {
-            waitMs = (DWORD)((rtEnd - rtStart) / 10000);
+    const REFERENCE_TIME minInterval = 10000000LL / m_pSettings->m_maxFPS;
+    const bool hasValidTimestamp = (rtStart >= 0) && (rtEnd > rtStart);
+    const bool isMonotonic = (m_lastOutputTime <= 0) || (rtStart >= m_lastOutputTime);
+    REFERENCE_TIME nowWallclock = (REFERENCE_TIME)GetTickCount64() * 10000;
+
+    // タイムライン同期:
+    // 有効タイムスタンプ入力では、最初の入力時刻を基準に壁時計へ同期する。
+    if (hasValidTimestamp) {
+        if (!m_timelineBaseInitialized || rtStart < m_timelineBaseInputTime) {
+            m_timelineBaseInputTime = rtStart;
+            m_timelineBaseWallclockTime = nowWallclock;
+            m_timelineBaseInitialized = true;
         }
-        if (waitMs > 0 && waitMs < kTransformMaxSleepMs) {
-            Sleep(waitMs);
+
+        const REFERENCE_TIME desiredWallclock =
+            m_timelineBaseWallclockTime + (rtStart - m_timelineBaseInputTime);
+        if (desiredWallclock > nowWallclock) {
+            const REFERENCE_TIME remain = desiredWallclock - nowWallclock;
+            DWORD waitMs = (DWORD)(remain / 10000);
+            if (waitMs > 0) {
+                if (waitMs > kTransformMaxSleepMs) {
+                    waitMs = kTransformMaxSleepMs;
+                }
+                Sleep(waitMs);
+                nowWallclock = (REFERENCE_TIME)GetTickCount64() * 10000;
+            }
         }
-        m_droppedFrames++;
-        return S_FALSE; // Skip
     }
-    m_lastOutputTime = rtStart;
+
+    // 基本は入力タイムスタンプ基準。無効/非単調な場合のみ壁時計へフォールバックする。
+    if (hasValidTimestamp && isMonotonic) {
+        if (m_lastOutputTime > 0) {
+            const REFERENCE_TIME tsDelta = rtStart - m_lastOutputTime;
+            if (tsDelta < minInterval) {
+                m_droppedFrames++;
+                return S_FALSE; // Skip
+            }
+        }
+
+        if (m_lastOutputWallclockTime > 0) {
+            const REFERENCE_TIME wcDelta = nowWallclock - m_lastOutputWallclockTime;
+            if (wcDelta < minInterval) {
+                m_droppedFrames++;
+                return S_FALSE; // Skip
+            }
+        }
+
+        m_lastOutputTime = rtStart;
+        m_lastOutputWallclockTime = nowWallclock;
+        return S_OK;
+    }
+
+    // 無効タイムスタンプ時は、壁時計のみでFPS制限を適用
+    if (!m_loggedTimestampFallback && m_pSettings && m_pSettings->m_debugMode) {
+        OutputDebugStringA("[LR2BGAFilter] WaitFPSLimit fallback to wallclock (invalid/non-monotonic input timestamp)\n");
+        m_loggedTimestampFallback = true;
+    }
+
+    if (m_lastOutputWallclockTime > 0) {
+        const REFERENCE_TIME delta = nowWallclock - m_lastOutputWallclockTime;
+        if (delta < minInterval) {
+            m_droppedFrames++;
+            return S_FALSE; // Skip
+        }
+    }
+
+    m_lastOutputWallclockTime = nowWallclock;
     return S_OK;
 }
 
