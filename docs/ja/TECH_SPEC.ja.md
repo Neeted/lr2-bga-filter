@@ -3,10 +3,10 @@
 ## 1. 文書情報
 - 文書名: LR2 BGA Filter 技術仕様書
 - 対象読者: 開発者、保守担当者、レビュー担当者
-- バージョン: v1.0
-- 最終更新日: 2026-02-13
+- バージョン: v1.0.1
+- 最終更新日: 2026-02-15
 - 対象リポジトリ: `lr2-bga-filter`
-- 対象ブランチ/タグ: `main / v1.0.0`
+- 対象ブランチ/タグ: `main / v1.0.1`
 
 ## 2. 目的とスコープ
 ### 2.1 目的
@@ -37,16 +37,33 @@
 ### 4.2 コンポーネント図
 ```mermaid
 flowchart LR
-  LAV[LAV Video Decoder] --> F[CLR2BGAFilter]
-  F --> LR2[LR2 Renderer]
-  F --> TL[LR2BGATransformLogic]
-  TL --> IMG[LR2BGAImageProc]
-  TL --> LB[LR2BGALetterboxDetector]
-  F --> WIN[LR2BGAWindow]
-  WIN --> EXT[LR2BGAExternalRenderer]
-  F --> CFG[LR2BGASettings]
-  F --> MON[LR2MemoryMonitor]
-  F --> NA[CLR2NullAudioRenderer]
+  subgraph External [External System]
+    LAV[LAV Video Decoder]
+    LR2[LR2 Renderer]
+  end
+
+  subgraph Filter [LR2BGAFilter Components]
+    F[CLR2BGAFilter]
+    TL[LR2BGATransformLogic]
+    IMG[LR2BGAImageProc]
+    LB[LR2BGALetterboxDetector]
+    WIN[LR2BGAWindow]
+    EXT[LR2BGAExternalRenderer]
+    CFG[LR2BGASettings]
+    MON[LR2MemoryMonitor]
+    NA[CLR2NullAudioRenderer]
+  end
+
+  LAV --> F
+  F --> LR2
+  F --> TL
+  TL --> IMG
+  TL --> LB
+  F --> WIN
+  WIN --> EXT
+  F --> CFG
+  F --> MON
+  F --> NA
 ```
 
 ## 5. 技術スタック
@@ -97,12 +114,13 @@ flowchart LR
 ### 7.1 Transformフロー
 1. 入力サンプル取得 (`pIn`)
 2. 入出力フォーマット解釈（StartStreamingで確定したキャッシュ値を使用）
-3. 黒帯検出依頼（200ms間隔）
-4. 外部ウィンドウ更新（有効時）
-5. FPS制限判定（超過時 `S_FALSE`）
-6. 出力生成（dummy/passthrough/resize）
-7. LR2向け明るさ適用
-8. タイムスタンプ・統計更新
+3. FPS制限同期・判定（`WaitFPSLimit`）
+4. 黒帯検出依頼（200ms間隔）
+5. 外部ウィンドウ更新（有効時）
+6. FPSドロップ分岐（判定結果に基づきリターン）
+7. 出力生成（dummy/passthrough/resize）
+8. LR2向け明るさ適用
+9. タイムスタンプ・統計更新
 
 ### 7.2 モード分岐
 - Dummy: 初回のみ黒画像出力、以降 `S_FALSE`
@@ -144,13 +162,13 @@ sequenceDiagram
   participant I as LR2BGAImageProc
 
   DS->>F: Transform(pIn,pOut)
+  F->>T: WaitFPSLimit(rtStart, rtEnd)
   F->>T: ProcessLetterboxDetection(...)
   alt extWindowEnabled
     F->>W: UpdateExternalWindow(...)
   end
-  F->>T: WaitFPSLimit(rtStart, rtEnd)
   alt over limit
-    T-->>F: S_FALSE
+    T-->>F: S_FALSE (Drop Flag)
     F-->>DS: S_FALSE
   else continue
     F->>T: FillOutputBuffer(...)
@@ -196,26 +214,26 @@ sequenceDiagram
 
 ## 10. COMインターフェース仕様 (`ILR2BGAFilterSettings`)
 ### 10.1 設定API（主要）
-| API | 値域/制約 | 永続化 | 備考 |
-|---|---|---|---|
-| `SetOutputSize` | width,height: 1..4096 | 即時Save | 無効値は `E_INVALIDARG` |
-| `SetResizeAlgorithm` | `NEAREST`/`BILINEAR` | 即時Save | 無効値は `E_INVALIDARG` |
-| `SetMaxFPS` | 1..60 | 即時Save | 無効値は `E_INVALIDARG` |
-| `SetLimitFPS` | BOOL | 即時Save |  |
-| `SetDummyMode` | BOOL | 即時Save | dummy送信状態リセット |
-| `SetPassthroughMode` | BOOL | 即時Save |  |
-| `SetExternalWindowEnabled` | BOOL | 即時Save | 状態に応じて即時表示/クローズ |
-| `SetExternalWindowSize` | 1..4096 | 即時Save | 無効値は `E_INVALIDARG` |
-| `SetBrightnessLR2` | 0..100 | 即時Save | 無効値は `E_INVALIDARG` |
-| `SetBrightnessExt` | 0..100 | 即時Save | Overlay更新 |
-| `SetGamepadID` | 0..15 | 即時Save | 監視スレッド再起動 |
-| `SetGamepadButtonID` | 0..31 | 即時Save | 監視スレッド再起動 |
-| `SetKeyboardKeyCode` | int | 即時Save | 監視スレッド再起動 |
-| `SetAutoRemoveLetterbox` | BOOL | 即時Save | 検出状態リセット |
-| `SetLetterboxThreshold` | int | 即時Save | detectorへ即時反映 |
-| `SetLetterboxStability` | int | 即時Save | detectorへ即時反映 |
-| `SetOnlyOutputToLR2` | BOOL | 即時Save | 接続制約 |
-| `SetOnlyOutputToRenderer` | BOOL | 即時Save | 接続制約 |
+| API                        | 値域/制約             | 永続化   | 備考                          |
+| -------------------------- | --------------------- | -------- | ----------------------------- |
+| `SetOutputSize`            | width,height: 1..4096 | 即時Save | 無効値は `E_INVALIDARG`       |
+| `SetResizeAlgorithm`       | `NEAREST`/`BILINEAR`  | 即時Save | 無効値は `E_INVALIDARG`       |
+| `SetMaxFPS`                | 1..60                 | 即時Save | 無効値は `E_INVALIDARG`       |
+| `SetLimitFPS`              | BOOL                  | 即時Save |                               |
+| `SetDummyMode`             | BOOL                  | 即時Save | dummy送信状態リセット         |
+| `SetPassthroughMode`       | BOOL                  | 即時Save |                               |
+| `SetExternalWindowEnabled` | BOOL                  | 即時Save | 状態に応じて即時表示/クローズ |
+| `SetExternalWindowSize`    | 1..4096               | 即時Save | 無効値は `E_INVALIDARG`       |
+| `SetBrightnessLR2`         | 0..100                | 即時Save | 無効値は `E_INVALIDARG`       |
+| `SetBrightnessExt`         | 0..100                | 即時Save | Overlay更新                   |
+| `SetGamepadID`             | 0..15                 | 即時Save | 監視スレッド再起動            |
+| `SetGamepadButtonID`       | 0..31                 | 即時Save | 監視スレッド再起動            |
+| `SetKeyboardKeyCode`       | int                   | 即時Save | 監視スレッド再起動            |
+| `SetAutoRemoveLetterbox`   | BOOL                  | 即時Save | 検出状態リセット              |
+| `SetLetterboxThreshold`    | int                   | 即時Save | detectorへ即時反映            |
+| `SetLetterboxStability`    | int                   | 即時Save | detectorへ即時反映            |
+| `SetOnlyOutputToLR2`       | BOOL                  | 即時Save | 接続制約                      |
+| `SetOnlyOutputToRenderer`  | BOOL                  | 即時Save | 接続制約                      |
 
 ### 10.2 プロパティページ
 - `CLR2BGAFilterPropertyPage` が設定UIを担当。
@@ -226,40 +244,40 @@ sequenceDiagram
 - `HKCU\Software\LR2BGAFilter`
 
 ### 11.2 主要キー
-| Key | Type | Default | Range | 説明 |
-|---|---|---:|---|---|
-| OutputWidth | DWORD | 256 | 1..4096 | LR2出力幅 |
-| OutputHeight | DWORD | 256 | 1..4096 | LR2出力高 |
-| ResizeAlgo | DWORD | 1 | 0/1 | 0=Nearest,1=Bilinear |
-| KeepAspectRatio | DWORD | 1 | 0/1 | LR2側アスペクト維持 |
-| DummyMode | DWORD | 0 | 0/1 | ダミーモード |
-| PassthroughMode | DWORD | 0 | 0/1 | パススルー |
-| MaxFPS | DWORD | 60 | 1..60 | FPS上限 |
-| LimitFPSEnabled | DWORD | 0 | 0/1 | FPS制限有効 |
-| ExtWindowEnabled | DWORD | 1 | 0/1 | 外部ウィンドウ有効 |
-| ExtWindowX/Y | DWORD | 0/0 | int | 外部ウィンドウ座標 |
-| ExtWindowWidth/Height | DWORD | 512/512 | 1..4096 | 外部ウィンドウサイズ |
-| ExtWindowAlgo | DWORD | 1 | 0/1 | 外部ウィンドウ補間 |
-| ExtWindowKeepAspect | DWORD | 1 | 0/1 | 外部ウィンドウAR維持 |
-| ExtWindowPassthrough | DWORD | 0 | 0/1 | 外部ウィンドウパススルー |
-| ExtWindowTopmost | DWORD | 1 | 0/1 | 最前面 |
-| BrightnessLR2 | DWORD | 100 | 0..100 | LR2明るさ |
-| BrightnessExt | DWORD | 100 | 0..100 | 外部ウィンドウ明るさ |
-| AutoOpenSettings | DWORD | 0 | 0/1 | 自動設定画面 |
-| AutoRemoveLetterbox | DWORD | 1 | 0/1 | 黒帯除去有効 |
-| LetterboxThreshold | DWORD | 22 | 0..255 | 黒判定閾値 |
-| LetterboxStability | DWORD | 3 | 1..900(UI) | 安定化フレーム数 |
-| CloseOnRightClick | DWORD | 1 | 0/1 | 右クリックで閉じる |
-| CloseOnResult | DWORD | 0 | 0/1 | リザルトで閉じる |
-| GamepadCloseEnabled | DWORD | 0 | 0/1 | ゲームパッド閉じる |
-| GamepadID | DWORD | 0 | 0..15 | デバイスID |
-| GamepadButtonID | DWORD | 0 | 0..31 | ボタンID |
-| KeyboardCloseEnabled | DWORD | 0 | 0/1 | キーで閉じる |
-| KeyboardKeyCode | DWORD | VK_RETURN | int | 仮想キーコード |
-| OnlyOutputToLR2 | DWORD | 1 | 0/1 | LR2プロセス制限 |
-| OnlyOutputToRenderer | DWORD | 1 | 0/1 | レンダラ制限 |
-| DebugWindowX/Y | DWORD | CW_USEDEFAULT | int | デバッグ位置 |
-| DebugWindowWidth/Height | DWORD | 450/1000 | int | デバッグサイズ |
+| Key                     | Type  |       Default | Range      | 説明                     |
+| ----------------------- | ----- | ------------: | ---------- | ------------------------ |
+| OutputWidth             | DWORD |           256 | 1..4096    | LR2出力幅                |
+| OutputHeight            | DWORD |           256 | 1..4096    | LR2出力高                |
+| ResizeAlgo              | DWORD |             1 | 0/1        | 0=Nearest,1=Bilinear     |
+| KeepAspectRatio         | DWORD |             1 | 0/1        | LR2側アスペクト維持      |
+| DummyMode               | DWORD |             0 | 0/1        | ダミーモード             |
+| PassthroughMode         | DWORD |             0 | 0/1        | パススルー               |
+| MaxFPS                  | DWORD |            60 | 1..60      | FPS上限                  |
+| LimitFPSEnabled         | DWORD |             0 | 0/1        | FPS制限有効              |
+| ExtWindowEnabled        | DWORD |             1 | 0/1        | 外部ウィンドウ有効       |
+| ExtWindowX/Y            | DWORD |           0/0 | int        | 外部ウィンドウ座標       |
+| ExtWindowWidth/Height   | DWORD |       512/512 | 1..4096    | 外部ウィンドウサイズ     |
+| ExtWindowAlgo           | DWORD |             1 | 0/1        | 外部ウィンドウ補間       |
+| ExtWindowKeepAspect     | DWORD |             1 | 0/1        | 外部ウィンドウAR維持     |
+| ExtWindowPassthrough    | DWORD |             0 | 0/1        | 外部ウィンドウパススルー |
+| ExtWindowTopmost        | DWORD |             1 | 0/1        | 最前面                   |
+| BrightnessLR2           | DWORD |           100 | 0..100     | LR2明るさ                |
+| BrightnessExt           | DWORD |           100 | 0..100     | 外部ウィンドウ明るさ     |
+| AutoOpenSettings        | DWORD |             0 | 0/1        | 自動設定画面             |
+| AutoRemoveLetterbox     | DWORD |             1 | 0/1        | 黒帯除去有効             |
+| LetterboxThreshold      | DWORD |            22 | 0..255     | 黒判定閾値               |
+| LetterboxStability      | DWORD |             3 | 1..900(UI) | 安定化フレーム数         |
+| CloseOnRightClick       | DWORD |             1 | 0/1        | 右クリックで閉じる       |
+| CloseOnResult           | DWORD |             0 | 0/1        | リザルトで閉じる         |
+| GamepadCloseEnabled     | DWORD |             0 | 0/1        | ゲームパッド閉じる       |
+| GamepadID               | DWORD |             0 | 0..15      | デバイスID               |
+| GamepadButtonID         | DWORD |             0 | 0..31      | ボタンID                 |
+| KeyboardCloseEnabled    | DWORD |             0 | 0/1        | キーで閉じる             |
+| KeyboardKeyCode         | DWORD |     VK_RETURN | int        | 仮想キーコード           |
+| OnlyOutputToLR2         | DWORD |             1 | 0/1        | LR2プロセス制限          |
+| OnlyOutputToRenderer    | DWORD |             1 | 0/1        | レンダラ制限             |
+| DebugWindowX/Y          | DWORD | CW_USEDEFAULT | int        | デバッグ位置             |
+| DebugWindowWidth/Height | DWORD |      450/1000 | int        | デバッグサイズ           |
 
 ### 11.3 反映タイミング
 - 即時反映: 外部ウィンドウ表示/位置/Topmost、外部輝度、入力監視条件
@@ -282,11 +300,45 @@ sequenceDiagram
 - 安定化: 3フレーム
 - 判定モード初期値: `LB_MODE_ORIGINAL`
 
+### 12.4 状態遷移図
+
+```mermaid
+stateDiagram-v2
+    [*] --> Original
+    
+    Original --> Candidate : Detect Letterbox (4#58;3 or 16#58;9)
+    Candidate --> Candidate : Keep Detecting (Count++)
+    Candidate --> Stable : Count >= Stability Threshold
+    Candidate --> Original : Detect Clean (Reset)
+    
+    Stable --> Original : Detect Clean (Reset)
+    Stable --> Stable : Keep Detecting
+```
+
 ## 13. パフォーマンス仕様
+
 ### 13.1 FPS制限
+
 - `LimitFPSEnabled=true` かつ `MaxFPS>0` の場合適用。
-- `minInterval = 10,000,000 / MaxFPS` (100ns単位)
-- 間隔未満フレームは `S_FALSE` を返しドロップ。
+- **時間同期 (Sync)**: 入力タイムスタンプを実時間 (Wallclock) に同期させ、再生速度を維持する (`Sleep` 使用)。
+- **間引き (Drop)**: 同期後の実時間が前回出力時刻から `minInterval` (10,000,000 / MaxFPS) 未満であれば `S_FALSE` を返し、LR2への出力をスキップする。
+
+- 外部ウィンドウ更新はFPS制限の影響を受けず、ソースフレームレートで継続する。
+
+#### 13.1.1 処理フロー
+
+```mermaid
+flowchart TD
+    Start([Transform Start]) --> Calc[Calc Sync Time]
+    Calc --> Sync["Sleep (Wallclock Sync)"]
+    Sync --> Check{Drop Frame?}
+    Check -- Yes/No --> Detect[Letterbox Request]
+    Detect --> ExtWin[Update External Window]
+    ExtWin --> Branch{Drop by FPS?}
+    Branch -- Yes --> Skip([Return S_FALSE])
+    Branch -- No --> Output[Fill Output Buffer]
+    Output --> End([Return S_OK])
+```
 
 ### 13.2 画像処理最適化
 - Nearest: CppOpt + ThreadPool
@@ -299,14 +351,16 @@ sequenceDiagram
 - `m_totalProcessTime`, `m_avgProcessTime`
 
 ## 14. スレッドモデル・同期仕様
+
 ### 14.1 スレッド
+
 - DirectShow処理スレッド (`Transform`)
-- Letterbox解析スレッド
-- 外部ウィンドウスレッド
-- デバッグウィンドウスレッド
-- 入力監視スレッド
-- プロパティページスレッド
-- MemoryMonitor監視スレッド
+- Letterbox解析スレッド (`LetterboxThread`)
+- 外部ウィンドウスレッド (`ExternalWindow`)
+- デバッグウィンドウスレッド (`DebugWindow`)
+- 入力監視スレッド (`InputMonitor`)
+- プロパティページスレッド (`PropertyPage`)
+- MemoryMonitor監視スレッド (`MemoryMonitor`)
 
 ### 14.2 ロック階層
 - フィルタ側:
@@ -322,6 +376,30 @@ sequenceDiagram
 ### 14.3 同期ポリシー
 - ロック保持中に `SendMessage` 等のGUI同期呼び出しは避ける。
 - バッファ共有は mutex で保護し、ロックスコープを最小化する。
+
+### 14.4 ロック依存関係図
+
+```mermaid
+graph TD
+    subgraph Threads
+        TR[Transform Thread]
+        LB[Letterbox Thread]
+    end
+    
+    subgraph Resources
+        M_LB_BUF[m_mtxLBBuffer]
+        M_LB_CTRL[m_mtxLBControl]
+        M_LB_MODE[m_mtxLBMode]
+    end
+
+    TR -->|"Write/Copy"| M_LB_BUF
+    TR -->|Notify| M_LB_CTRL
+    TR -->|"Read Mode"| M_LB_MODE
+
+    LB -->|"Read/Copy"| M_LB_BUF
+    LB -->|"Wait/Wake"| M_LB_CTRL
+    LB -->|"Write Mode"| M_LB_MODE
+```
 
 ## 15. 外部ウィンドウ・デバッグUI仕様
 ### 15.1 外部ウィンドウ
@@ -421,7 +499,9 @@ sequenceDiagram
 - API/設定仕様の自動生成
 - 単体テスト導入（変換ロジック/検出ロジック）
 
-### 20.3 仕様変更ポリシー
+## 21. 仕様変更ポリシー
+
+### 21.1 変更分類
 - 仕様変更が必要: MediaType契約（入力許容/出力形式）を変更する場合
 - 仕様変更が必要: 設定キーの意味・既定値・値域を変更する場合
 - 仕様変更が必要: Pin接続制約の既定動作を変更する場合
@@ -429,32 +509,32 @@ sequenceDiagram
 - 実装差し替えで対応可能: 内部バッファ構造の変更（外部契約を維持する場合）
 - 実装差し替えで対応可能: デバッグ表示項目の追加（既存挙動を変えない場合）
 
-### 20.3.1 MemoryMonitorフック運用ポリシー
+### 21.2 MemoryMonitorフック運用ポリシー
 - `LR2MemoryMonitor` のコードパッチはプロセス寿命中に再利用する前提とし、停止時のアンフック/復元は原則行わない。
 - 他ツール（例: LR2Helper）との共存を優先し、既存フック検出時は相乗り動作を優先する。
 - フック解析に失敗した場合は再生処理を優先し、監視機能のみ無効化して継続する。
 
-### 20.4 観測性チェックリスト（回帰調査用）
+## 22. 観測性チェックリスト（回帰調査用）
 - Debug UIで `Input/Output Filter` が想定通りか。
 - `Dropped Frames` と `Avg Processing Time` の傾向が変更前後で悪化していないか。
 - フィルタグラフ情報が途切れず表示されるか。
 - 黒帯判定情報（detected mode / stability）がフリッカしないか。
 
-### 20.5 リスクレジスタ（要監視）
-| ID | リスク | 影響 | 検知方法 | 緩和策 |
-|---|---|---|---|---|
-| R-01 | `LR2MemoryMonitor` のアドレス/命令列依存 | リザルト検知失敗、誤検知 | Debug出力、CloseOnResultの実機確認 | 失敗時は監視を無効化して再生継続 |
-| R-02 | ロック順序逸脱 | デッドロック | 長時間再生テスト、スレッドダンプ | ロック階層ルール厳守、GUI呼び出しをロック外へ |
-| R-03 | 接続制約の誤変更 | LR2外で予期せぬ接続 | GraphStudio等で接続試験 | `OnlyOutputTo*` の既定ON維持と回帰試験 |
-| R-04 | SIMD経路の不具合 | 色崩れ/クラッシュ | AVX2/SSE4.1/CppOpt比較 | フォールバック経路維持、差分検証 |
+## 23. リスクレジスタ（要監視）
+| ID   | リスク                                   | 影響                     | 検知方法                           | 緩和策                                        |
+| ---- | ---------------------------------------- | ------------------------ | ---------------------------------- | --------------------------------------------- |
+| R-01 | `LR2MemoryMonitor` のアドレス/命令列依存 | リザルト検知失敗、誤検知 | Debug出力、CloseOnResultの実機確認 | 失敗時は監視を無効化して再生継続              |
+| R-02 | ロック順序逸脱                           | デッドロック             | 長時間再生テスト、スレッドダンプ   | ロック階層ルール厳守、GUI呼び出しをロック外へ |
+| R-03 | 接続制約の誤変更                         | LR2外で予期せぬ接続      | GraphStudio等で接続試験            | `OnlyOutputTo*` の既定ON維持と回帰試験        |
+| R-04 | SIMD経路の不具合                         | 色崩れ/クラッシュ        | AVX2/SSE4.1/CppOpt比較             | フォールバック経路維持、差分検証              |
 
-## 21. 変更履歴
-| Date | Version | Author | Summary |
-|---|---|---|---|
-| 2026-02-13 | v0.1-draft | Codex | 雛形作成 |
-| 2026-02-13 | v0.2-draft | Codex | 実装値に基づく具体化 |
-| 2026-02-13 | v1.0 | Codex | 未確定項目を確定値に更新し体裁を最終化 |
-| 2026-02-13 | v1.1 | Codex | 互換性/受け入れ基準/運用ポリシーを追記 |
-| 2026-02-13 | v1.2 | Codex | DummyModeの期待挙動（one-shot出力）を受け入れ基準に明記 |
-
-
+## 24. 変更履歴
+| Date       | Version | Author      | Summary                                                 |
+| ---------- | ------- | ----------- | ------------------------------------------------------- |
+| 2026-02-13 | v1.0.0  | Codex       | 雛形作成                                                |
+| 2026-02-13 | v1.0.0  | Codex       | 実装値に基づく具体化                                    |
+| 2026-02-13 | v1.0.0  | Codex       | 未確定項目を確定値に更新し体裁を最終化                  |
+| 2026-02-13 | v1.0.0  | Codex       | 互換性/受け入れ基準/運用ポリシーを追記                  |
+| 2026-02-13 | v1.0.0  | Codex       | DummyModeの期待挙動（one-shot出力）を受け入れ基準に明記 |
+| 2026-02-15 | v1.0.1  | Antigravity | FPS制限ロジック変更（時間同期追加）とドキュメント反映   |
+| 2026-02-15 | v1.0.1  | Antigravity | 体裁修正: セクション階層・構成整理、スレッド名表記統一  |

@@ -29,9 +29,14 @@ To make this filter work properly, **LAVFilters** installation and the following
     - Install LAV Splitter (x86), LAV Video Decoder (x86). Others are unnecessary.
 
 2. **LAV Video Decoder Settings**
-    - **Enable Major Formats**: Keep almost all Input Formats (H.264, HEVC, MPEG4, etc.) enabled. Should be enabled by default.
-    - **Output Formats**: **Check ONLY RGB32 and uncheck everything else.**
+
+    ![LAV Video Decoder Recommended Settings](docs/img/lav_setting.png)
+
+    - **Output Formats**: As shown above, **check ONLY RGB32 and uncheck everything else.**
         - *Reason*: LR2 only accepts RGB24 input. By limiting LAV output to RGB32, we intentionally establish the route "LAV (RGB32) -> [This Filter] -> LR2 (RGB24)", forcing this filter to be used.
+    - **Enable Hardware Decoder (Hardware Acceleration)**: As shown above, setting Hardware Decoder to **D3D11** is recommended.
+        - When playing high-resolution, high-framerate BGAs (e.g., 2000x1500 60fps AVC) with software decoding, the increased CPU load can affect note rendering smoothness. Enabling hardware decoding offloads video decode processing to the GPU, reducing CPU load.
+        - D3D11 should work in most environments. If your GPU does not support it, leaving the default None will still work, but performance may degrade with demanding BGAs.
 
 3. **Merit Value (Priority) Settings**
     - The installer sets this filter (`LR2BGAFilter`) to **Highest Priority (Merit Value)**.
