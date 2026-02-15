@@ -28,9 +28,14 @@ LR2 (Lunatic Rave 2) 용 DirectShow 필터입니다. BGA의 재생 품질과 성
     - LAV Splitter (x86), LAV Video Decoder (x86)를 설치해 주세요. 그 외는 불필요합니다.
 
 2. **LAV Video Decoder 설정**
-    - **주요 포맷의 유효화**: 거의 모든 Input Formats(H.264, HEVC, MPEG4 등)를 유효한 상태로 해 두세요. 기본값으로 유효하게 되어 있을 겁니다.
-    - **출력 색공간의 제한 (Output Formats)**: **RGB32 만을 체크하고, 다른 것은 모두 해제해 주세요.**
+
+    ![LAV Video Decoder 권장 설정](docs/img/lav_setting.png)
+
+    - **출력 색공간의 제한 (Output Formats)**: 위 그림과 같이, **RGB32 만을 체크하고, 다른 것은 모두 해제해 주세요.**
         - *이유*: LR2 본체는 RGB24 입력밖에 받지 않습니다. LAV의 출력을 RGB32로 한정하는 것으로, 「LAV (RGB32) -> [본 필터] -> LR2 (RGB24)」라고 하는 경로를 의도적으로 성립시켜, 본 필터가 강제적으로 사용되도록 합니다.
+    - **하드웨어 디코더 활성화 (Hardware Acceleration)**: 위 그림과 같이, Hardware Decoder를 **D3D11**로 설정하는 것을 권장합니다.
+        - 고해상도・고프레임레이트의 BGA(예: 2000x1500 60fps AVC)를 소프트웨어 디코딩으로 재생하면, CPU에 대한 부하가 높아져 노트 묘화의 부드러움에 영향을 줄 수 있습니다. 하드웨어 디코더를 활성화하면 동영상 디코드 처리가 GPU로 오프로드되어 CPU 부하가 경감됩니다.
+        - 대부분의 환경에서는 D3D11을 선택하면 문제 없습니다. GPU가 대응하지 않는 경우는 기본값인 None 그대로도 동작하지만, 고부하 BGA에서 성능이 저하될 가능성이 있습니다.
 
 3. **메리트 값(우선도)의 설정**
     - 인스톨러에 의해 본 필터(`LR2BGAFilter`)는 **가장 높은 우선도(Merit Value)**로 설정됩니다.
