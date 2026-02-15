@@ -351,8 +351,10 @@ void CLR2BGAFilterPropertyPage::InitBindings()
             BOOL enable = !m_passthroughMode;
             EnableWindow(GetDlgItem(m_Dlg, IDC_EDIT_WIDTH), enable);
             EnableWindow(GetDlgItem(m_Dlg, IDC_EDIT_HEIGHT), enable);
-            EnableWindow(GetDlgItem(m_Dlg, IDC_COMBO_ALGORITHM), enable);
-            EnableWindow(GetDlgItem(m_Dlg, IDC_CHECK_KEEPASPECT), enable);
+            // PassThrough時でもクロップ有無に応じてリサイズ経路に入るため、
+            // Algo/KeepAspectは常に変更可能にする。
+            EnableWindow(GetDlgItem(m_Dlg, IDC_COMBO_ALGORITHM), TRUE);
+            EnableWindow(GetDlgItem(m_Dlg, IDC_CHECK_KEEPASPECT), TRUE);
         }
     });
 
@@ -375,8 +377,10 @@ void CLR2BGAFilterPropertyPage::InitBindings()
             BOOL enableSize = enabled && !passthrough;
             EnableWindow(GetDlgItem(m_Dlg, IDC_EDIT_EXT_WIDTH), enableSize);
             EnableWindow(GetDlgItem(m_Dlg, IDC_EDIT_EXT_HEIGHT), enableSize);
-            EnableWindow(GetDlgItem(m_Dlg, IDC_COMBO_EXT_ALGO), enableSize);
-            EnableWindow(GetDlgItem(m_Dlg, IDC_CHECK_EXT_KEEPASPECT), enableSize);
+            // External PassThrough時もリサイズ経路へ入るケースがあるため、
+            // Algo/KeepAspectはExternal Window有効時なら変更可能にする。
+            EnableWindow(GetDlgItem(m_Dlg, IDC_COMBO_EXT_ALGO), enabled);
+            EnableWindow(GetDlgItem(m_Dlg, IDC_CHECK_EXT_KEEPASPECT), enabled);
         }
     });
 
@@ -384,10 +388,11 @@ void CLR2BGAFilterPropertyPage::InitBindings()
         [this]() {
             // 上記ロジックを再利用、または個別実装
             BOOL enableSize = m_extEnabled && !m_extPassthrough;
+            BOOL enabled = m_extEnabled;
             EnableWindow(GetDlgItem(m_Dlg, IDC_EDIT_EXT_WIDTH), enableSize);
             EnableWindow(GetDlgItem(m_Dlg, IDC_EDIT_EXT_HEIGHT), enableSize);
-            EnableWindow(GetDlgItem(m_Dlg, IDC_COMBO_EXT_ALGO), enableSize);
-            EnableWindow(GetDlgItem(m_Dlg, IDC_CHECK_EXT_KEEPASPECT), enableSize);
+            EnableWindow(GetDlgItem(m_Dlg, IDC_COMBO_EXT_ALGO), enabled);
+            EnableWindow(GetDlgItem(m_Dlg, IDC_CHECK_EXT_KEEPASPECT), enabled);
         }
     });
 
