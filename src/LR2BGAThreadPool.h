@@ -10,11 +10,6 @@
 //   LR2BGAThreadPool::Instance().ParallelFor(0, height, [&](int startY, int endY) {
 //       // 行 [startY, endY) を処理
 //   });
-//
-// 注意:
-//   - C++17 では std::result_of は非推奨です (std::invoke_result 推奨)
-//   - 本実装では互換性のため std::result_of を使用していますが、
-//     将来的に更新を検討してください。
 //------------------------------------------------------------------------------
 #pragma once
 
@@ -77,9 +72,9 @@ public:
     // 汎用タスクのエンキュー
     template<class F, class... Args>
     auto Enqueue(F&& f, Args&&... args) 
-        -> std::future<typename std::result_of<F(Args...)>::type>
+        -> std::future<std::invoke_result_t<F, Args...>>
     {
-        using return_type = typename std::result_of<F(Args...)>::type;
+        using return_type = std::invoke_result_t<F, Args...>;
 
         auto task = std::make_shared<std::packaged_task<return_type()>>(
             std::bind(std::forward<F>(f), std::forward<Args>(args)...)

@@ -1,4 +1,3 @@
-﻿LIBRARY     "LR2BGAFilter"
 EXPORTS
     DllGetClassObject       PRIVATE
     DllCanUnloadNow         PRIVATE

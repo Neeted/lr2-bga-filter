@@ -58,10 +58,10 @@ void LR2BGATransformLogic::StartStreaming(int inputWidth, int inputHeight, int i
     bool isSizeSame = (inputWidth == outputWidth) && (inputHeight == outputHeight);
     // 32bit->24bit変換が必要な場合でもパススルー扱い（単純コピーで済む）
     
-    // パススルー条件:
+    // パススルー候補条件:
     //   1. 入出力サイズが完全一致
-    //   2. アスペクト比維持がOFF（ONだと黒帯除去時に余白計算が発生するため）
-    m_activePassthrough = isSizeSame && !m_pSettings->m_keepAspectRatio;
+    // 最終判定は FillOutputBuffer 側で pSrcRect（クロップ有無）も加味して行う。
+    m_activePassthrough = isSizeSame;
 
     // ダミーモード
     // 設定で有効化された場合を正とし、入力不正(0x0)時もフェイルセーフで有効化する
@@ -417,10 +417,11 @@ HRESULT LR2BGATransformLogic::FillOutputBuffer(const BYTE* pSrcData, BYTE* pDstD
     }
 
     // -------------------------------------------------------------------------
-    // パススルー判定
-    // m_activePassthrough は StartStreaming でラッチ済み
+    // No-Resize判定
+    // StartStreaming での同サイズ候補に加え、クロップ未適用（pSrcRect == nullptr）の場合のみ
+    // コピー経路を通す。クロップありの場合は同サイズでもリサイズ経路へ回す。
     // -------------------------------------------------------------------------
-    bool isPassthrough = m_activePassthrough;
+    const bool isPassthrough = m_activePassthrough && (pSrcRect == nullptr);
 
     if (isPassthrough) {
         // パススルー時も出力バッファサイズを超えないように制限
