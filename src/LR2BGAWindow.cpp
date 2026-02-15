@@ -42,6 +42,21 @@ constexpr DWORD kInputMonitorIntervalMs = 50;   // 入力監視のポーリン�
 constexpr DWORD kFocusRestoreDelayMs = 100;     // フォーカス復帰待機時間 (ms)
 constexpr int kDebugWindowButtonMargin = 50;    // デバッグウィンドウのボタン領域高さ (px)
 
+using SetThreadDpiAwarenessContextFn = DPI_AWARENESS_CONTEXT (WINAPI*)(DPI_AWARENESS_CONTEXT);
+
+//------------------------------------------------------------------------------
+// DPIヘルパー
+// 外部ウィンドウ作成スレッドのみ DPI Aware に切り替えるための関数ポインタを取得
+// (古いWindowsではAPI未実装の可能性があるため動的解決する)
+//------------------------------------------------------------------------------
+static SetThreadDpiAwarenessContextFn ResolveSetThreadDpiAwarenessContext()
+{
+    HMODULE hUser32 = GetModuleHandleW(L"user32.dll");
+    if (!hUser32) return nullptr;
+    return reinterpret_cast<SetThreadDpiAwarenessContextFn>(
+        GetProcAddress(hUser32, "SetThreadDpiAwarenessContext"));
+}
+
 // Defined in LR2BGAFilter.h/cpp, but we declare it here to avoid circular include issues
 EXTERN_C const GUID CLSID_LR2BGAFilterPropertyPage;
 
@@ -999,6 +1014,18 @@ void LR2BGAWindow::ExtWindowThread()
 {
     // 外部ウィンドウ用スレッドのエントリポイント
     // GUIスレッドとして独立して動作し、メインのフィルタ処理（DirectShow）がブロックしても応答性を維持します。
+    //
+    // DPI設定:
+    // Windowsの表示倍率(150%など)の影響でウィンドウサイズが論理座標に仮想化されることを防ぐため、
+    // 外部ウィンドウ作成スレッドのみ Per-Monitor Aware(V2) に切り替えます。
+    // ウィンドウ作成後は元のコンテキストへ戻します。
+    SetThreadDpiAwarenessContextFn pSetThreadDpiAwarenessContext = ResolveSetThreadDpiAwarenessContext();
+    DPI_AWARENESS_CONTEXT oldDpiCtx = NULL;
+    bool changedDpiCtx = false;
+    if (pSetThreadDpiAwarenessContext) {
+        oldDpiCtx = pSetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
+        changedDpiCtx = (oldDpiCtx != NULL);
+    }
 
     // 1. 外部ウィンドウクラスの登録
     //    フィルタDLLのインスタンスハンドルを使用してWNDCLASSEXを登録します。
@@ -1076,6 +1103,11 @@ void LR2BGAWindow::ExtWindowThread()
     // スレッド終了時にハンドルを無効化します。
     m_hExtWnd = NULL;
     m_hOverlayWnd = NULL;
+
+    // DPIコンテキストを復元
+    if (pSetThreadDpiAwarenessContext && changedDpiCtx) {
+        pSetThreadDpiAwarenessContext(oldDpiCtx);
+    }
 }
 
 void LR2BGAWindow::InputMonitorThread()
