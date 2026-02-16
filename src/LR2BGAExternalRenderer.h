@@ -21,6 +21,7 @@
 #include <windows.h>
 #include <vector>
 #include <mutex>
+#include <atomic>
 #include "LR2BGASettings.h"
 
 // --------------------------------------------------------------------------------------
@@ -71,4 +72,21 @@ private:
     // リサイズ用LUT (キャッシュ)
     std::vector<int> m_lutXIndices;
     std::vector<short> m_lutXWeights;
+
+    // PassThrough時のウィンドウサイズ適用キャッシュ
+    // 毎フレームのGetWindowRect/SetWindowPosを避けるため、直近適用サイズを保持する
+    int m_lastAppliedWndWidth;
+    int m_lastAppliedWndHeight;
+    bool m_hasAppliedWndSize;
+
+    // 再描画要求の多重投入抑制
+    // true: WM_PAINT 未処理の再描画要求あり
+    std::atomic<bool> m_repaintQueued;
+
+    // GDI描画用のBITMAPINFOキャッシュ
+    // バッファサイズ変更時のみ更新し、Paintのホットパスでの初期化コストを削減する
+    BITMAPINFO m_cachedBmi;
+    int m_cachedBmiWidth;
+    int m_cachedBmiHeight;
+    bool m_hasCachedBmi;
 };
