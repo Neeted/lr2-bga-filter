@@ -41,6 +41,7 @@ extern HINSTANCE g_hInst;  // LR2BGAFilter.cpp で定義
 constexpr DWORD kInputMonitorIntervalMs = 50;   // 入力監視のポーリング間隔 (ms)
 constexpr DWORD kFocusRestoreDelayMs = 100;     // フォーカス復帰待機時間 (ms)
 constexpr int kDebugWindowButtonMargin = 50;    // デバッグウィンドウのボタン領域高さ (px)
+constexpr int kExtResizeBorderPx = 8;           // 外部ウィンドウのリサイズ判定幅 (px)
 
 using SetThreadDpiAwarenessContextFn = DPI_AWARENESS_CONTEXT (WINAPI*)(DPI_AWARENESS_CONTEXT);
 
@@ -376,14 +377,46 @@ LRESULT CALLBACK LR2BGAWindow::ExtWndProc(HWND hwnd, UINT uMsg, WPARAM wParam, L
     if (pWindow) {
         switch (uMsg) {
         case WM_LBUTTONDOWN:
-            SendMessage(hwnd, HTCAPTION, 0, 0);
+            // クライアント領域の左ドラッグでタイトルバー移動相当を開始
+            // (HTCAPTION はヒットテスト値であり、メッセージIDではない点に注意)
+            SendMessage(hwnd, WM_NCLBUTTONDOWN, HTCAPTION, lParam);
             return 0;
             
         case WM_NCHITTEST:
             {
                 LRESULT hit = DefWindowProcW(hwnd, uMsg, wParam, lParam);
-                if (hit == HTCLIENT) return HTCAPTION;
-                return hit;
+                if (hit != HTCLIENT) return hit;
+
+                // PassThrough有効時はウィンドウサイズを自動追従させるため、
+                // 手動リサイズを無効化してドラッグ移動のみ許可する。
+                if (pWindow->m_pSettings->m_extWindowPassthrough) {
+                    return HTCAPTION;
+                }
+
+                RECT rc;
+                if (!GetWindowRect(hwnd, &rc)) {
+                    return HTCAPTION;
+                }
+
+                int mouseX = (int)(short)LOWORD(lParam);
+                int mouseY = (int)(short)HIWORD(lParam);
+                bool onLeft = (mouseX >= rc.left && mouseX < rc.left + kExtResizeBorderPx);
+                bool onRight = (mouseX <= rc.right && mouseX > rc.right - kExtResizeBorderPx);
+                bool onTop = (mouseY >= rc.top && mouseY < rc.top + kExtResizeBorderPx);
+                bool onBottom = (mouseY <= rc.bottom && mouseY > rc.bottom - kExtResizeBorderPx);
+
+                // 角判定を優先
+                if (onTop && onLeft) return HTTOPLEFT;
+                if (onTop && onRight) return HTTOPRIGHT;
+                if (onBottom && onLeft) return HTBOTTOMLEFT;
+                if (onBottom && onRight) return HTBOTTOMRIGHT;
+                if (onLeft) return HTLEFT;
+                if (onRight) return HTRIGHT;
+                if (onTop) return HTTOP;
+                if (onBottom) return HTBOTTOM;
+
+                // クライアント内はドラッグ移動
+                return HTCAPTION;
             }
         
         case WM_RBUTTONUP:
@@ -424,9 +457,34 @@ LRESULT CALLBACK LR2BGAWindow::ExtWndProc(HWND hwnd, UINT uMsg, WPARAM wParam, L
             {
                 RECT rect;
                 GetWindowRect(hwnd, &rect);
-                pWindow->m_pSettings->m_extWindowX = rect.left;
-                pWindow->m_pSettings->m_extWindowY = rect.top;
-                pWindow->m_pSettings->Save(); // Sync save
+                bool changed = false;
+                int width = rect.right - rect.left;
+                int height = rect.bottom - rect.top;
+
+                if (pWindow->m_pSettings->m_extWindowX != rect.left) {
+                    pWindow->m_pSettings->m_extWindowX = rect.left;
+                    changed = true;
+                }
+                if (pWindow->m_pSettings->m_extWindowY != rect.top) {
+                    pWindow->m_pSettings->m_extWindowY = rect.top;
+                    changed = true;
+                }
+
+                // PassThrough中はサイズを自動追従しているため設定サイズは上書きしない。
+                if (!pWindow->m_pSettings->m_extWindowPassthrough) {
+                    if (width > 0 && pWindow->m_pSettings->m_extWindowWidth != width) {
+                        pWindow->m_pSettings->m_extWindowWidth = width;
+                        changed = true;
+                    }
+                    if (height > 0 && pWindow->m_pSettings->m_extWindowHeight != height) {
+                        pWindow->m_pSettings->m_extWindowHeight = height;
+                        changed = true;
+                    }
+                }
+
+                if (changed) {
+                    pWindow->m_pSettings->Save(); // Sync save
+                }
                 
                 // Sync Overlay (WS_POPUPに戻し、Zオーダーは変更しない)
                 if (pWindow->m_hOverlayWnd) {
